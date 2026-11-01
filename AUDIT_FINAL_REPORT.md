@@ -23,7 +23,7 @@
 | UX-01 | Medium | New guest progress started with 13 sample bookmarks, making an empty first-use state impossible. | `src/lib/progress-storage.ts` | **FIXED AND VERIFIED** — new guest progress starts with an empty saved-ID list. Existing browser data is not migrated or deleted; previously stored seeded IDs may remain. | Browser check: new guest showed zero saved questions; saving two questions persisted them across refresh. |
 | UX-02 | Low | Saved-question difficulty options and filters compared inconsistent stored casing literally. | `src/pages/SavedPage.tsx` | **FIXED AND VERIFIED** — values are normalized for options and matching. | Browser check: options were `All`, `Easy`, `Medium`; each difficulty returned one matching question. |
 | TXT-01 | Low | “PYQ's” terminology, a reply typo, and a malformed sample announcement were inconsistent. | `Navbar.tsx`, course and PYQ pages, `src/lib/data.ts` | **FIXED AND VERIFIED** in source; no remaining `PYQ's`, `W'll`, or old malformed announcement strings were found in `src`. | Source search and TypeScript/build checks. |
-| META-01 | Medium | The local app title was generic in the original site metadata. | `.figma/make/site.json` | **FIXED LOCALLY** — metadata now names “NPTEL Practice Platform”; `noindex` remains unchanged. | Local production build emits the expected title. Production still serves “Figma Make App” and an older asset hash, proving the local correction is not deployed there yet. |
+| META-01 | Medium | The app title was generic in the original site metadata. | `.figma/make/site.json` | **FIXED AND DEPLOYED** — metadata now names “NPTEL Practice Platform”; `noindex` remains unchanged. | Local build emits the expected title; after push, public production serves the updated title and a newer hashed JS asset. Homepage, `/courses`, and that asset returned HTTP 200. |
 | SEC-01 | Medium | `validReport()` allowed malformed nested report references and answer indexes because it checked only a subset of nested fields. | `firestore.rules` | **FIXED IN WORKTREE; PRODUCTION UNVERIFIED** — validate nonempty bounded week IDs, optional question ID/text types and lengths, numeric bounds, and answer indexes 0–7. | Added emulator denials for malformed week ID and out-of-range answer index; all seven rules tests pass. The rules have not been deployed to Firebase. |
 | DATA-01 | High | Only one course has content metadata; four other records are explicitly empty sample placeholders. The populated course declares 119 weekly and 166 PYQ questions but the bundle contains only 13 complete question objects. | `src/lib/data.ts`, `src/lib/question-bank.ts` | **REQUIRES MANUAL ACTION** — no questions or answers were invented. | Source inventory; full course/PYQ text is not present to verify. |
 | DATA-02 | High | Twenty admin question summaries (10 under week 6 and 10 under PYQ paper 1) have question text, option count and answer index, but no actual option text or explanations. Most declared paper/week content is absent or not fully mapped. | `src/lib/data.ts` | **REQUIRES AUTHORITATIVE NPTEL MATERIAL** — preserve current data; verify answers and mappings before filling gaps. | Source inspection. Academic answer correctness was not independently verified. |
@@ -86,12 +86,12 @@ No authoritative course source or complete original source material was availabl
 
 ## G. SEO, performance and deployment
 
-- Production currently serves the generic title “Figma Make App” and old JS bundle; the current local build uses “NPTEL Practice Platform.” This confirms the title/content fixes have not reached production yet.
+- After the audit commit was pushed, production began serving the title “NPTEL Practice Platform” and a newer hashed JS bundle. The homepage, `/courses` SPA route, and deployed JS asset returned HTTP 200. This is public-site verification of the frontend deployment, not access to Vercel build logs.
 - Production robots policy is explicitly configured to block indexing. It was preserved because intent cannot be inferred safely.
 - `/sitemap.xml` currently falls through the SPA rewrite.
-- Production Vercel environment settings could not be inspected; CLI is unauthenticated and no Vercel project link exists in the checkout.
+- Production Vercel environment settings and deployment records could not be inspected; the CLI is logged out and no Vercel project link exists in the checkout. The updated public bundle confirms a deployment occurred, but the exact Vercel build record remains unverified. Firebase rules were not deployed.
 - Build passes with the oversized-chunk warning noted above.
-- At report creation, no audit commit, push, Firebase deployment, or Vercel deployment had been verified. Deployment must remain **UNVERIFIED** until an authorized push/build is observed and production is rechecked.
+- **Audit commit:** `8d4a571442ac7f4677deab92f9f12f536c040016` (`main`). Push to `origin/main` was verified by `git ls-remote`. **Frontend production deployment:** observed via the updated title and asset responses. **Firebase rules deployment:** not performed. Vercel build logs/configuration remain unavailable.
 
 ## H. Changed files and preserved work
 
@@ -130,7 +130,7 @@ Pre-existing unrelated/uncommitted work was preserved and is not included in the
 2. Provide the official NPTEL course source/material for content verification; do not fill missing academic data without it.
 3. Decide whether the production site should be publicly indexed. If yes, authorize changing the noindex/robots policy and adding a real sitemap.
 4. Decide and approve a schema-backed migration for durable feedback, reports, course content, admin edits, announcements and audit records. Protect all existing production data and use a backup/rollback plan.
-5. Link/authenticate Vercel to inspect production environment configuration and verify deployment status.
+5. Authenticate/link Vercel to inspect production environment configuration and deployment records; the public frontend update is verified, but the build record and environment settings are not.
 6. After access and approval, verify production Google sign-in and the complete callback/session flow with a dedicated test account.
 7. Address code splitting as a separate regression-tested performance change.
 
