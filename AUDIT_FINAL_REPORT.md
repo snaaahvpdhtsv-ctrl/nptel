@@ -94,7 +94,7 @@ No authoritative course source or complete original source material was availabl
 - `/sitemap.xml` currently falls through the SPA rewrite.
 - Production Vercel environment settings and deployment records could not be inspected; the CLI is logged out and no Vercel project link exists in the checkout. The updated public bundle confirms a deployment occurred, but the exact Vercel build record remains unverified. Firebase rules were not deployed.
 - Build passes with the oversized-chunk warning noted above.
-- **Audit commit:** `8d4a571442ac7f4677deab92f9f12f536c040016` (`main`). Push to `origin/main` was verified by `git ls-remote`. **Frontend production deployment:** observed via the updated title and asset responses. **Firebase rules deployment:** not performed. Vercel build logs/configuration remain unavailable.
+- **Audit commits:** `8d4a571442ac7f4677deab92f9f12f536c040016` (audit corrections), `c9265308ab38a363a6ac3f86ced6ee237ccf7947` (deployment evidence), and `c81759fdd4e1fe913bffc5dd2c75ea0601c65a02` (idempotent retry rules/test). Pushes to `origin/main` were verified with `git ls-remote`. **Frontend production deployment:** observed via the updated title and asset responses after the audit push. **Firebase rules deployment:** not performed. Vercel build logs/configuration remain unavailable.
 
 ## H. Changed files and preserved work
 
