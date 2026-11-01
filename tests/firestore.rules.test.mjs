@@ -130,6 +130,7 @@ test("users can read and write only their own progress", async () => {
   await assertFails(
     getDoc(doc(otherDatabase, "users", "learner-1", "attempts", "attempt-1")),
   )
+  await assertSucceeds(setDoc(ownAttempt, attempt))
   await assertFails(
     setDoc(
       doc(otherDatabase, "users", "learner-1", "bookmarks", "question-1"),

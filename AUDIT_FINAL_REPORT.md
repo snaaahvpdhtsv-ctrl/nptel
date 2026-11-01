@@ -13,8 +13,9 @@
 | Accessibility | axe-core checked five public screens and seven admin sections at 1440px and 390px (24 screen/viewport combinations). No WCAG 2.1 A/AA violations were reported after entrance animations settled. |
 | Courses and content | All five bundled course records, all 12 week metadata records, all 13 PYQ paper metadata records, 13 full question objects and 20 incomplete admin question summaries were reviewed. |
 | Firebase production | Local configuration and public deployment references checked. **Zero production collections/documents were inspected** because Firebase access was denied. |
-| Emulator security | Seven Firestore rules test cases with 40 allow/deny assertions passed against the Firestore emulator. |
-| Browser workflows | Emulator-backed email registration, refresh/session restoration, Google popup sign-in, ordinary-user admin denial, custom-claim admin access, quiz/results/history, bookmarks, and an announcement edit/refresh were exercised. |
+| Emulator security | Seven Firestore rules test cases with 41 allow/deny assertions passed against the Firestore emulator. |
+| Browser workflows | Emulator-backed email registration, refresh/session restoration, Google popup sign-in, ordinary-user admin denial, custom-claim admin access, quiz/results/history, bookmarks, guest-to-account progress migration, and an announcement edit/refresh were exercised. |
+| Rendered UI | Landing page rendered at 1440×900 and 390×844. No mobile horizontal overflow or browser console errors; desktop document width matched the viewport. |
 
 ## B. Findings and corrections
 
@@ -22,6 +23,7 @@
 |---|---|---|---|---|---|
 | UX-01 | Medium | New guest progress started with 13 sample bookmarks, making an empty first-use state impossible. | `src/lib/progress-storage.ts` | **FIXED AND VERIFIED** — new guest progress starts with an empty saved-ID list. Existing browser data is not migrated or deleted; previously stored seeded IDs may remain. | Browser check: new guest showed zero saved questions; saving two questions persisted them across refresh. |
 | UX-02 | Low | Saved-question difficulty options and filters compared inconsistent stored casing literally. | `src/pages/SavedPage.tsx` | **FIXED AND VERIFIED** — values are normalized for options and matching. | Browser check: options were `All`, `Easy`, `Medium`; each difficulty returned one matching question. |
+| SYNC-01 | Medium | A repeated initial sync could write an already-created quiz attempt as an update; rules rejected all attempt updates, surfacing a sync failure and leaving guest progress unmigrated. | `src/lib/progress-state.tsx` (uncommitted sync implementation), `firestore.rules` | **FIXED AND VERIFIED IN EMULATOR** — permit only an exact equality update for the same owner, preserving attempt immutability while making identical retries idempotent. | Emulator denies changed attempt data and accepts an identical repeat. Browser test confirmed guest attempt/bookmark moved to account documents, guest state was cleared, no sync error appeared, and account progress survived refresh. Production rules/app sync remain unverified. |
 | TXT-01 | Low | “PYQ's” terminology, a reply typo, and a malformed sample announcement were inconsistent. | `Navbar.tsx`, course and PYQ pages, `src/lib/data.ts` | **FIXED AND VERIFIED** in source; no remaining `PYQ's`, `W'll`, or old malformed announcement strings were found in `src`. | Source search and TypeScript/build checks. |
 | META-01 | Medium | The app title was generic in the original site metadata. | `.figma/make/site.json` | **FIXED AND DEPLOYED** — metadata now names “NPTEL Practice Platform”; `noindex` remains unchanged. | Local build emits the expected title; after push, public production serves the updated title and a newer hashed JS asset. Homepage, `/courses`, and that asset returned HTTP 200. |
 | SEC-01 | Medium | `validReport()` allowed malformed nested report references and answer indexes because it checked only a subset of nested fields. | `firestore.rules` | **FIXED IN WORKTREE; PRODUCTION UNVERIFIED** — validate nonempty bounded week IDs, optional question ID/text types and lengths, numeric bounds, and answer indexes 0–7. | Added emulator denials for malformed week ID and out-of-range answer index; all seven rules tests pass. The rules have not been deployed to Firebase. |
@@ -42,7 +44,7 @@
 - **Production access:** Firebase CLI could not list the target Firestore database (403) or Firebase apps. Production providers, authorized domains, Google OAuth setup, rules, indexes, profile documents, progress documents and custom claims are **UNVERIFIED**.
 - **Application schema surface:** auth profile creation uses `users/{uid}`; account progress uses `users/{uid}/attempts/{attemptId}` and `users/{uid}/bookmarks/{questionId}`. The app does not fetch course/question content or durable admin content in the inspected source; those remain bundled/in-memory.
 - **Emulator auth:** email signup, session restoration after refresh, Google popup completion, normal learner rejection from admin sign-in, and custom-claim admin dashboard access passed in the Auth emulator. This is **not production authentication verification**.
-- **Rules:** 11 document-match patterns are present in the checked-in rules. Emulator tests cover published-content ancestry, owner isolation, profile role restrictions, custom-claim admin writes, announcement reads, and constrained feedback/report writes. Production rules were not read or deployed.
+- **Rules:** 11 document-match patterns are present in the checked-in rules. Emulator tests cover published-content ancestry, owner isolation, profile role restrictions, custom-claim admin writes, announcement reads, constrained feedback/report writes, and idempotent attempt retries. Production rules were not read or deployed.
 - **Indexes:** no `firestore.indexes.json` is present; live index configuration is inaccessible. No application compound content query was identified in the inspected Firestore client code.
 
 ## D. Content completeness
@@ -65,7 +67,7 @@ No authoritative course source or complete original source material was availabl
 |---|---|
 | Guest course browsing and course routing | **PARTIALLY VERIFIED** — route and guest flows work; four displayed courses are empty placeholders. |
 | Weekly answer key | **PARTIALLY VERIFIED** — bundled sample questions render; many declared questions are absent. |
-| Practice selection, answer feedback, results, history | **VERIFIED LOCALLY** for the included sample questions; history persists locally and signed-in sync code exists in the worktree. Production sync is unverified. |
+| Practice selection, answer feedback, results, history | **VERIFIED LOCALLY** for the included sample questions. A working-tree account sync implementation persisted guest attempts/bookmarks to emulator Firestore and restored progress after refresh. That implementation remains uncommitted; production sync is unverified. |
 | PYQ browsing/practice | **PARTIALLY VERIFIED** — paper metadata/routes work; most paper question text is explicitly unavailable. |
 | Saved questions | **FIXED AND VERIFIED** — new guest state is empty, bookmarks can be toggled, filters work and local storage survives refresh. |
 | Email/password auth | **PARTIALLY VERIFIED** — emulator signup and session restoration passed; previous audit also exercised login/logout and invalid password. Production provider configuration remains unverified. |
@@ -81,8 +83,9 @@ No authoritative course source or complete original source material was availabl
 - No client-side admin role field is accepted by the user-profile create rules; admin writes use the trusted `admin` custom claim. Emulator tests deny a normal learner’s content/announcement write and reject profile self-elevation.
 - Report nested values now receive stronger shape/range validation. This is a local rules change only; production behavior is unknown until the live rules are compared and a controlled deployment is authorized.
 - No production user data was read or modified. No Firebase Admin credentials were put in frontend code or tracked.
+- Repeated attempt writes are allowed only when the replacement document exactly equals the stored document; emulator tests verify actual attempt changes remain denied.
 - axe-core reported zero WCAG 2.1 A/AA violations across the 24 sampled public/admin screen-width combinations after animations settled. This does not constitute a full manual keyboard or screen-reader audit.
-- Prior production checks reported no console errors or failed requests on the sampled routes. The emulator browser checks in this continuation reported no browser errors.
+- Current screenshot/browser evidence: first impression is a clearly identified NPTEL course picker with the course list as the primary action and a dark gradient/aurora visual direction. The 1440×900 screenshot had the decorative aurora extending beyond viewport bounds without increasing document scroll width; at 390×844, there was no horizontal overflow. No browser console errors were observed.
 
 ## G. SEO, performance and deployment
 
@@ -103,11 +106,11 @@ Audit corrections/tests in the worktree:
 - `src/lib/progress-storage.ts` — empty first-use guest progress. This file also contains a separate pre-existing parser/cloud-progress change; do not stage that unrelated hunk with the guest-default fix.
 - `src/pages/SavedPage.tsx` — difficulty normalization.
 - `firebase.json` — emulator ports and Firestore rules path required to run the checked-in rules test command.
-- `firestore.rules` — stricter nested report validation.
-- `tests/firestore.rules.test.mjs` — expanded Firestore emulator coverage.
+- `firestore.rules` — stricter nested report validation and exact-equality-only retry for immutable attempts.
+- `tests/firestore.rules.test.mjs` — expanded Firestore emulator coverage, including idempotent retry and mutation denial.
 - `AUDIT_FINAL_REPORT.md` — this report.
 
-Pre-existing unrelated/uncommitted work was preserved and is not included in the audit change set: `src/lib/progress-state.tsx`, the cloud-progress parser/integration hunk in `src/lib/progress-storage.ts`, `src/pages/admin/OverviewSection.tsx`, `FIREBASE_SETUP.md`, `scripts/`, and `src/lib/cloud-progress.ts`. Any staging must remain file/hunk-specific.
+Pre-existing/uncommitted work was preserved and is not included in the audit change set: `src/lib/progress-state.tsx`, the cloud-progress parser/integration hunk in `src/lib/progress-storage.ts`, `src/pages/admin/OverviewSection.tsx`, `FIREBASE_SETUP.md`, `scripts/`, and `src/lib/cloud-progress.ts`. The in-progress progress sync code was exercised against the emulator to diagnose and verify the idempotent rules correction, but remains uncommitted and is not part of the production deployment. Any staging must remain file/hunk-specific.
 
 ## I. Test results
 
@@ -117,7 +120,7 @@ Pre-existing unrelated/uncommitted work was preserved and is not included in the
 | `npx tsc --noEmit` | **PASS**. |
 | `npx oxfmt --check ...` | **PASS** on the audited TypeScript/JSON/test files. |
 | `git diff --check` | **PASS**. |
-| `npm run test:rules` | **PASS** — 7 tests, 40 allow/deny assertions, 0 failures, Firestore emulator only. |
+| `npm run test:rules` | **PASS** — 7 tests, 41 allow/deny assertions, 0 failures, Firestore emulator only. |
 | Playwright Auth emulator | **PASS** — signup, refresh persistence, learner admin denial, admin custom-claim admission, Google popup. |
 | Playwright preview behavior | **PASS as preview behavior** — announcement edit succeeds but does not survive refresh, confirming session-only state. |
 | axe-core | **PASS** — 24 sampled public/admin viewport combinations, zero reported WCAG A/AA violations after animations settled. |
