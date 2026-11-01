@@ -1,4 +1,5 @@
 {
+  "title": "NPTEL Practice Platform",
   "description": "An independent study and exam-preparation platform for NPTEL learners to review answer keys and past papers, practise quizzes, track progress, and save questions for revision.",
   "robots": {
     "index": false

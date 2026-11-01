@@ -135,7 +135,7 @@ export function PyqPaperPage() {
       icon={FileText}
       title={paper.title}
       subtitle={`${[paper.year, paper.session].filter(Boolean).join(" · ")} · ${paper.questionCount} questions`}
-      back={{ to: path("/pyq/answers"), label: "PYQ's Answers" }}
+      back={{ to: path("/pyq/answers"), label: "PYQ Answers" }}
       notice="Question text for this paper isn't included in this preview"
     />
   )
@@ -158,7 +158,7 @@ export function PyqPracticeRunPage() {
             } · ${chosen.reduce((sum, paper) => sum + paper.questionCount, 0)} questions`
           : "No papers selected"
       }
-      back={{ to: path("/pyq/practice"), label: "Practice PYQ's" }}
+      back={{ to: path("/pyq/practice"), label: "Practice PYQs" }}
       notice="Question text for these papers isn't included in this preview"
       action={
         <Link to={path("/pyq/practice")} className="btn-primary px-5 py-2.5">

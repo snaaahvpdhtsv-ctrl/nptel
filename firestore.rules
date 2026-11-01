@@ -1,0 +1,205 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    function owns(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function publishedCourse(courseId) {
+      return exists(/databases/$(database)/documents/courses/$(courseId))
+        && get(/databases/$(database)/documents/courses/$(courseId)).data.status == "published";
+    }
+
+    function publishedWeek(weekId) {
+      return exists(/databases/$(database)/documents/weeks/$(weekId))
+        && get(/databases/$(database)/documents/weeks/$(weekId)).data.status == "published"
+        && publishedCourse(get(/databases/$(database)/documents/weeks/$(weekId)).data.courseId);
+    }
+
+    function publishedPaper(paperId) {
+      return exists(/databases/$(database)/documents/papers/$(paperId))
+        && get(/databases/$(database)/documents/papers/$(paperId)).data.status == "published"
+        && publishedCourse(get(/databases/$(database)/documents/papers/$(paperId)).data.courseId);
+    }
+
+    function validFeedback() {
+      return request.resource.data.keys().hasOnly([
+          "courseId", "type", "status", "message", "contact",
+          "createdAt", "age", "ownerId"
+        ])
+        && request.resource.data.type in ["feedback", "question", "request"]
+        && request.resource.data.status == "pending"
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 5000
+        && (!("courseId" in request.resource.data)
+          || (request.resource.data.courseId is string
+            && request.resource.data.courseId.size() <= 120))
+        && request.resource.data.createdAt is string
+        && request.resource.data.createdAt.size() <= 100
+        && (!("age" in request.resource.data)
+          || (request.resource.data.age is string
+            && request.resource.data.age.size() <= 40))
+        && (!("contact" in request.resource.data)
+          || (request.resource.data.contact is string
+            && request.resource.data.contact.size() <= 320))
+        && (!("ownerId" in request.resource.data)
+          || (signedIn() && request.resource.data.ownerId == request.auth.uid));
+    }
+
+    function validReport() {
+      return request.resource.data.keys().hasOnly([
+          "courseId", "type", "status", "message", "createdAt",
+          "age", "report", "ownerId", "contact"
+        ])
+        && request.resource.data.type == "report"
+        && request.resource.data.status == "pending"
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 5000
+        && request.resource.data.createdAt is string
+        && request.resource.data.createdAt.size() <= 100
+        && (!("courseId" in request.resource.data)
+          || (request.resource.data.courseId is string
+            && request.resource.data.courseId.size() <= 120))
+        && (!("age" in request.resource.data)
+          || (request.resource.data.age is string
+            && request.resource.data.age.size() <= 40))
+        && (!("contact" in request.resource.data)
+          || (request.resource.data.contact is string
+            && request.resource.data.contact.size() <= 320))
+        && request.resource.data.report is map
+        && request.resource.data.report.keys().hasOnly([
+          "weekId", "weekNumber", "questionNumber", "questionId",
+          "questionText", "issue", "markedAnswer", "suggestedAnswer", "details"
+        ])
+        && request.resource.data.report.weekId is string
+        && request.resource.data.report.weekId.size() > 0
+        && request.resource.data.report.weekId.size() <= 120
+        && request.resource.data.report.details is string
+        && request.resource.data.report.details.size() <= 5000
+        && request.resource.data.report.issue in [
+          "answer", "question", "option", "other"
+        ]
+        && request.resource.data.report.weekNumber is int
+        && request.resource.data.report.weekNumber >= 1
+        && request.resource.data.report.weekNumber <= 1000
+        && request.resource.data.report.questionNumber is int
+        && request.resource.data.report.questionNumber >= 0
+        && request.resource.data.report.questionNumber <= 1000
+        && (!("questionId" in request.resource.data.report)
+          || (request.resource.data.report.questionId is string
+            && request.resource.data.report.questionId.size() <= 120))
+        && (!("questionText" in request.resource.data.report)
+          || (request.resource.data.report.questionText is string
+            && request.resource.data.report.questionText.size() <= 5000))
+        && (!("markedAnswer" in request.resource.data.report)
+          || (request.resource.data.report.markedAnswer is int
+            && request.resource.data.report.markedAnswer >= 0
+            && request.resource.data.report.markedAnswer <= 7))
+        && (!("suggestedAnswer" in request.resource.data.report)
+          || (request.resource.data.report.suggestedAnswer is int
+            && request.resource.data.report.suggestedAnswer >= 0
+            && request.resource.data.report.suggestedAnswer <= 7))
+        && (!("ownerId" in request.resource.data)
+          || (signedIn() && request.resource.data.ownerId == request.auth.uid));
+    }
+
+    match /courses/{courseId} {
+      allow read: if isAdmin() || resource.data.status == "published";
+      allow write: if isAdmin();
+    }
+
+    match /weeks/{weekId} {
+      allow read: if isAdmin()
+        || (resource.data.status == "published" && publishedCourse(resource.data.courseId));
+      allow write: if isAdmin();
+    }
+
+    match /papers/{paperId} {
+      allow read: if isAdmin()
+        || (resource.data.status == "published" && publishedCourse(resource.data.courseId));
+      allow write: if isAdmin();
+    }
+
+    match /questions/{questionId} {
+      allow read: if isAdmin()
+        || (resource.data.status == "published"
+          && (("weekId" in resource.data && publishedWeek(resource.data.weekId))
+            || ("paperId" in resource.data && publishedPaper(resource.data.paperId))));
+      allow write: if isAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if isAdmin() || resource.data.draft == false;
+      allow write: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if owns(userId) || isAdmin();
+      allow create: if owns(userId)
+        && request.resource.data.keys().hasOnly([
+          "displayName", "email", "createdAt", "updatedAt"
+        ])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 120
+        && request.resource.data.email == request.auth.token.email;
+      allow update: if owns(userId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(["displayName", "updatedAt"])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 120;
+      allow delete: if isAdmin();
+
+      match /bookmarks/{questionId} {
+        allow read: if owns(userId);
+        allow create, update: if owns(userId)
+          && request.resource.data.keys().hasOnly(["questionId", "createdAt"])
+          && request.resource.data.questionId == questionId;
+        allow delete: if owns(userId);
+      }
+
+      match /attempts/{attemptId} {
+        allow read, delete: if owns(userId);
+        allow create: if owns(userId)
+          && request.resource.data.keys().hasOnly([
+            "id", "courseId", "kind", "weekIds", "startedAt",
+            "completedAt", "durationSeconds", "shuffleQuestions",
+            "shuffleOptions", "answers"
+          ])
+          && request.resource.data.courseId is string
+          && request.resource.data.kind in ["practice", "mistakes"]
+          && request.resource.data.answers is list
+          && request.resource.data.answers.size() <= 100
+          && request.resource.data.durationSeconds is number;
+        allow update: if false;
+      }
+    }
+
+    match /feedback/{feedbackId} {
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow create: if validFeedback();
+      allow update, delete: if isAdmin();
+    }
+
+    match /reports/{reportId} {
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow create: if validReport();
+      allow update, delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

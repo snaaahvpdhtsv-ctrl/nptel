@@ -33,14 +33,14 @@ export function PyqLandingPage() {
   const { path } = useCourse()
   const tracks = [
     {
-      title: "PYQ's Answers",
+      title: "PYQ Answers",
       desc: "Study previous-year questions with correct answers and available explanations.",
       icon: BookOpen,
       to: path("/pyq/answers"),
       gradient: "from-blue-500 to-teal-500",
     },
     {
-      title: "Practice PYQ's",
+      title: "Practice PYQs",
       desc: "Practise previous-year questions through interactive quizzes.",
       icon: Zap,
       to: path("/pyq/practice"),
@@ -80,10 +80,10 @@ export function PyqAnswersPage() {
 
   return (
     <div className="learner-page pyq-page max-w-6xl mx-auto px-4 py-8">
-      <BackLink to={path("/pyq")} label="PYQ's" />
+      <BackLink to={path("/pyq")} label="PYQs" />
       <PageHeader
         icon={BookOpen}
-        title="PYQ's Answers"
+        title="PYQ Answers"
         subtitle="Study mode — correct answers are shown"
         gradient="blue"
       />
@@ -161,10 +161,10 @@ export function PyqPracticePage() {
 
   return (
     <div className="learner-page pyq-page max-w-6xl mx-auto px-4 py-8">
-      <BackLink to={path("/pyq")} label="PYQ's" />
+      <BackLink to={path("/pyq")} label="PYQs" />
       <PageHeader
         icon={Zap}
-        title="Practice PYQ's"
+        title="Practice PYQs"
         subtitle="Select papers to practise, then customize your quiz."
         gradient="orange"
       />

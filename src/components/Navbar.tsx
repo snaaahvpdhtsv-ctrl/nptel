@@ -31,7 +31,7 @@ const courseLinks = (base: string): NavLink[] => [
   { label: "Home", path: base, exact: true },
   { label: "Answer Key", path: `${base}/study` },
   { label: "Practice Zone", path: `${base}/practice` },
-  { label: "PYQ's", path: `${base}/pyq` },
+  { label: "PYQs", path: `${base}/pyq` },
   { label: "Saved Questions", path: `${base}/saved` },
   { label: "Requests & Feedback", path: `${base}/feedback` },
 ]

@@ -5,7 +5,6 @@ import {
   type ProgressData,
   type QuizAttempt,
 } from "./progress"
-import { SAMPLE_SAVED_IDS } from "./question-bank"
 
 // The only module that reads or writes saved progress. Replace it with API
 // calls when a backend is added; pages only talk to ProgressProvider.
@@ -16,7 +15,7 @@ export const GUEST_OWNER = "guest"
 export const progressKey = (ownerId: string) => `nptel-progress:${ownerId}`
 
 export function emptyProgress(): ProgressData {
-  return { version: 1, attempts: [], savedIds: [...SAMPLE_SAVED_IDS] }
+  return { version: 1, attempts: [], savedIds: [] }
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

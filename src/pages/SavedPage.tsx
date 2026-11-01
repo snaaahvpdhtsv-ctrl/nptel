@@ -43,10 +43,16 @@ export default function SavedPage() {
         .filter((group) => group.week && group.questions.length > 0),
     [saved, weeks],
   )
+  const normalizeDifficulty = (value?: string) => {
+    const normalized = value?.trim().toLowerCase() ?? ""
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1)
+  }
   const difficulties = [
     ...new Set(
       groups.flatMap((group) =>
-        group.questions.map((question) => question.difficulty || ""),
+        group.questions.map((question) =>
+          normalizeDifficulty(question.difficulty),
+        ),
       ),
     ),
   ].filter(Boolean)
@@ -57,7 +63,8 @@ export default function SavedPage() {
     ...group,
     questions: group.questions.filter(
       (question) =>
-        (!difficulty || question.difficulty === difficulty) &&
+        (!difficulty ||
+          normalizeDifficulty(question.difficulty) === difficulty) &&
         matches([question.questionText, ...question.options]),
     ),
   }))

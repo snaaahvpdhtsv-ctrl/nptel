@@ -51,7 +51,7 @@ const features = [
     gradient: "from-pink-500 to-rose-600",
   },
   {
-    title: "PYQ's",
+    title: "PYQs",
     desc: "Study previous-year questions and practise for exams",
     icon: FileText,
     to: "/pyq",
@@ -67,7 +67,7 @@ const mobileFeatures = [
     icon: Zap,
     to: "/practice",
   },
-  { title: "PYQ's", desc: "Previous-year papers", icon: FileText, to: "/pyq" },
+  { title: "PYQs", desc: "Previous-year papers", icon: FileText, to: "/pyq" },
   {
     title: "Saved",
     desc: "Bookmarked questions",

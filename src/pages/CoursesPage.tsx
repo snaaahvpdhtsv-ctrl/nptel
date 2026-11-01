@@ -169,7 +169,7 @@ export default function CoursesPage() {
           Choose your course
         </h1>
         <p className="mt-5 text-gray-500 dark:text-gray-400 max-w-lg mx-auto">
-          Every course has its own answer key, practice zone, PYQ's, saved
+          Every course has its own answer key, practice zone, PYQs, saved
           questions and requests.
         </p>
       </motion.div>

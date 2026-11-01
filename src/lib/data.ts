@@ -433,10 +433,10 @@ export const initialRequests: RequestItem[] = [
     courseId: DEFAULT_COURSE_ID,
     type: "feedback",
     status: "replied",
-    message: "Add PYQ's",
+    message: "Add PYQs",
     createdAt: "4 Aug 2026",
     age: "2007h old",
-    reply: "W'll do it later.",
+    reply: "We'll do it later.",
     replyAt: "4 Aug 2026",
     replyVisible: true,
   },
@@ -492,7 +492,7 @@ export interface Announcement {
 export const initialAnnouncement: Announcement = {
   id: "announcement-1",
   message:
-    "uploaded a set of questions in PYQ's based on the morning slot examination..",
+    "A set of questions based on the morning exam session has been uploaded to PYQs.",
   durationSeconds: 10,
   draft: false,
   publishAt: "2026-10-25T12:03",

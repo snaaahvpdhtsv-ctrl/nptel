@@ -196,7 +196,7 @@ export default function MorePage() {
               <MenuRow
                 to={path("/pyq")}
                 icon={FileText}
-                title="PYQ's"
+                title="PYQs"
                 detail="Previous-year papers & practice"
                 tone="green"
               />
