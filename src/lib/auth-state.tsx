@@ -79,6 +79,22 @@ function authFailure(error: unknown): AuthFailure {
         ok: false,
         error: "This sign-in method is not enabled for this Firebase project.",
       }
+    case "auth/operation-not-supported-in-this-environment":
+      return {
+        ok: false,
+        error:
+          "Google sign-in pop-ups aren't supported in this browser. Try a current browser with pop-ups enabled.",
+      }
+    case "auth/invalid-api-key":
+      return {
+        ok: false,
+        error: "Firebase configuration is invalid for this deployment.",
+      }
+    case "auth/app-not-authorized":
+      return {
+        ok: false,
+        error: "This app isn't authorized for Firebase Authentication.",
+      }
     case "auth/popup-closed-by-user":
       return { ok: false, error: "Google sign-in was cancelled." }
     case "auth/cancelled-popup-request":

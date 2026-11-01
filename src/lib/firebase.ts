@@ -1,5 +1,6 @@
 import { FirebaseError, getApp, getApps, initializeApp } from "firebase/app"
 import {
+  browserPopupRedirectResolver,
   browserLocalPersistence,
   getAuth,
   initializeAuth,
@@ -33,6 +34,7 @@ if (app) {
   try {
     authInstance = initializeAuth(app, {
       persistence: browserLocalPersistence,
+      popupRedirectResolver: browserPopupRedirectResolver,
     })
   } catch (error) {
     if (
