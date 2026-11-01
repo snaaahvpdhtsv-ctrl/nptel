@@ -2,8 +2,10 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   onAuthStateChanged,
+  getRedirectResult,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
   signOut as firebaseSignOut,
   updateProfile,
   getIdTokenResult,
@@ -20,6 +22,8 @@ import {
 import {
   AuthContext,
   type AuthFailure,
+  type GoogleAuthResult,
+  type GoogleRedirectResult,
   type AuthResult,
   type AuthState,
   type SessionUser,
@@ -38,12 +42,17 @@ const configFailure: AuthFailure = {
 }
 const profileSyncWarning =
   "Your account is signed in, but your profile couldn't sync. Check your connection."
+const googleRedirectTargetKey = "nptel-google-redirect-target"
+const googleProvider = new GoogleAuthProvider()
+
+function errorCode(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error
+    ? String(error.code)
+    : ""
+}
 
 function authFailure(error: unknown): AuthFailure {
-  const code =
-    typeof error === "object" && error !== null && "code" in error
-      ? String(error.code)
-      : ""
+  const code = errorCode(error)
 
   switch (code) {
     case "auth/email-already-in-use":
@@ -159,6 +168,8 @@ async function createUserProfile(user: User, displayName: string) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null)
   const [loading, setLoading] = useState(firebaseConfigured)
+  const [googleRedirectResult, setGoogleRedirectResult] =
+    useState<GoogleRedirectResult | null>(null)
 
   useEffect(() => {
     if (!firebaseAuth) {
@@ -167,29 +178,121 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     let active = true
+    let authStateReady = false
+    let redirectResultReady = false
+    let redirectCompletionStarted = false
+    let observedFirebaseUser: User | null = null
+    const finishInitialLoad = () => {
+      if (active && authStateReady && redirectResultReady) setLoading(false)
+    }
+    const completeRedirect = async (firebaseUser: User) => {
+      if (!active || redirectCompletionStarted) return
+      redirectCompletionStarted = true
+      try {
+        const sessionUser = await toSessionUser(firebaseUser)
+        if (!active) return
+        setUser(sessionUser)
+        let warning: string | undefined
+        try {
+          await createUserProfile(
+            firebaseUser,
+            firebaseUser.displayName || "Learner",
+          )
+        } catch {
+          warning = profileSyncWarning
+        }
+        if (active) setGoogleRedirectResult({ status: "success", warning })
+      } catch (error) {
+        if (active)
+          setGoogleRedirectResult({
+            status: "error",
+            error: authFailure(error).error,
+          })
+      }
+    }
+    const resolveRedirectFromAuthState = () => {
+      if (
+        !active ||
+        !authStateReady ||
+        !redirectResultReady ||
+        redirectCompletionStarted
+      )
+        return
+
+      let hasRedirectTarget = false
+      try {
+        hasRedirectTarget = Boolean(
+          sessionStorage.getItem(googleRedirectTargetKey),
+        )
+      } catch {
+        // The redirect result itself still works if session storage is blocked.
+      }
+      if (hasRedirectTarget && observedFirebaseUser) {
+        void completeRedirect(observedFirebaseUser)
+      } else if (hasRedirectTarget) {
+        try {
+          sessionStorage.removeItem(googleRedirectTargetKey)
+        } catch {
+          // There is no authenticated user to return to the saved page.
+        }
+      }
+    }
     const unsubscribe = onAuthStateChanged(
       firebaseAuth,
       async (firebaseUser) => {
+        observedFirebaseUser = firebaseUser
         try {
           const next = firebaseUser ? await toSessionUser(firebaseUser) : null
           if (active) {
             setUser(next)
-            setLoading(false)
+            authStateReady = true
+            resolveRedirectFromAuthState()
+            finishInitialLoad()
           }
         } catch {
           if (active) {
             setUser(null)
-            setLoading(false)
+            observedFirebaseUser = null
+            authStateReady = true
+            resolveRedirectFromAuthState()
+            finishInitialLoad()
           }
         }
       },
       () => {
         if (active) {
           setUser(null)
-          setLoading(false)
+          observedFirebaseUser = null
+          authStateReady = true
+          resolveRedirectFromAuthState()
+          finishInitialLoad()
         }
       },
     )
+
+    void getRedirectResult(firebaseAuth)
+      .then(async (credential) => {
+        if (!active) return
+        if (credential) await completeRedirect(credential.user)
+      })
+      .catch((error: unknown) => {
+        if (!active) return
+        try {
+          sessionStorage.removeItem(googleRedirectTargetKey)
+        } catch {
+          // The visible authentication error is more useful than a storage error.
+        }
+        setGoogleRedirectResult({
+          status: "error",
+          error: authFailure(error).error,
+        })
+      })
+      .finally(() => {
+        redirectResultReady = true
+        resolveRedirectFromAuthState()
+        finishInitialLoad()
+      })
+
     return () => {
       active = false
       unsubscribe()
@@ -247,30 +350,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  const signInWithGoogle = useCallback(async (): Promise<AuthResult> => {
-    if (!firebaseAuth) return configFailure
-    try {
-      const credential = await signInWithPopup(
-        firebaseAuth,
-        new GoogleAuthProvider(),
-      )
-      const sessionUser = await toSessionUser(credential.user)
-      setUser(sessionUser)
-      setLoading(false)
-      let warning: string | undefined
+  const signInWithGoogle = useCallback(
+    async (redirectTo: string): Promise<GoogleAuthResult> => {
+      if (!firebaseAuth) return configFailure
       try {
-        await createUserProfile(
-          credential.user,
-          credential.user.displayName || "Learner",
-        )
+        const credential = await signInWithPopup(firebaseAuth, googleProvider)
+        const sessionUser = await toSessionUser(credential.user)
+        setUser(sessionUser)
+        setLoading(false)
+        let warning: string | undefined
+        try {
+          await createUserProfile(
+            credential.user,
+            credential.user.displayName || "Learner",
+          )
+        } catch (error) {
+          warning = profileSyncWarning
+        }
+        return { ok: true, user: sessionUser, warning }
       } catch (error) {
-        warning = profileSyncWarning
+        const code = errorCode(error)
+        if (
+          code === "auth/popup-blocked" ||
+          code === "auth/operation-not-supported-in-this-environment"
+        ) {
+          try {
+            sessionStorage.setItem(googleRedirectTargetKey, redirectTo)
+          } catch {
+            return {
+              ok: false,
+              error:
+                "Google sign-in couldn't open a pop-up, and this browser couldn't save your return page for redirect sign-in.",
+            }
+          }
+          try {
+            await signInWithRedirect(firebaseAuth, googleProvider)
+            return { redirecting: true }
+          } catch (redirectError) {
+            try {
+              sessionStorage.removeItem(googleRedirectTargetKey)
+            } catch {
+              // Preserve the Firebase redirect error for the user.
+            }
+            return authFailure(redirectError)
+          }
+        }
+        return authFailure(error)
       }
-      return { ok: true, user: sessionUser, warning }
-    } catch (error) {
-      return authFailure(error)
-    }
-  }, [])
+    },
+    [],
+  )
+
+  const acknowledgeGoogleRedirect = useCallback(
+    () => setGoogleRedirectResult(null),
+    [],
+  )
 
   const signInAdmin = useCallback(
     async (email: string, password: string): Promise<AuthResult> => {
@@ -316,13 +450,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       configured: firebaseConfigured,
+      googleRedirectResult,
       signIn,
       signUp,
       signInWithGoogle,
+      acknowledgeGoogleRedirect,
       signInAdmin,
       signOut,
     }),
-    [user, loading, signIn, signUp, signInWithGoogle, signInAdmin, signOut],
+    [
+      user,
+      loading,
+      googleRedirectResult,
+      signIn,
+      signUp,
+      signInWithGoogle,
+      acknowledgeGoogleRedirect,
+      signInAdmin,
+      signOut,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

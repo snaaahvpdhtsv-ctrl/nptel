@@ -33,16 +33,35 @@ export interface AuthFailure {
   code?: "account-exists"
 }
 
+export interface AuthRedirecting {
+  redirecting: true
+}
+
 export type AuthResult = AuthSuccess | AuthFailure
+export type GoogleAuthResult = AuthResult | AuthRedirecting
+
+export interface GoogleRedirectSuccess {
+  status: "success"
+  warning?: string
+}
+
+export interface GoogleRedirectFailure {
+  status: "error"
+  error: string
+}
+
+export type GoogleRedirectResult = GoogleRedirectSuccess | GoogleRedirectFailure
 
 export interface AuthState {
   /** The signed-in learner or admin, or null when signed out. */
   user: SessionUser | null
   loading: boolean
   configured: boolean
+  googleRedirectResult: GoogleRedirectResult | null
   signIn: (email: string, password: string) => Promise<AuthResult>
   signUp: (input: SignUpInput) => Promise<AuthResult>
-  signInWithGoogle: () => Promise<AuthResult>
+  signInWithGoogle: (redirectTo: string) => Promise<GoogleAuthResult>
+  acknowledgeGoogleRedirect: () => void
   signInAdmin: (email: string, password: string) => Promise<AuthResult>
   signOut: () => Promise<string | null>
 }

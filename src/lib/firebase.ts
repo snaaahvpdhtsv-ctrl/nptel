@@ -2,11 +2,16 @@ import { FirebaseError, getApp, getApps, initializeApp } from "firebase/app"
 import {
   browserPopupRedirectResolver,
   browserLocalPersistence,
+  connectAuthEmulator,
   getAuth,
   initializeAuth,
   type Auth,
 } from "firebase/auth"
-import { getFirestore, type Firestore } from "firebase/firestore"
+import {
+  connectFirestoreEmulator,
+  getFirestore,
+  type Firestore,
+} from "firebase/firestore"
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -51,3 +56,26 @@ if (app) {
 export const firebaseApp = app
 export const firebaseAuth = authInstance
 export const firestore = app ? getFirestore(app) : null
+
+if (import.meta.env.DEV && firebaseAuth) {
+  const authEmulatorUrl = import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_URL
+  if (authEmulatorUrl)
+    connectAuthEmulator(firebaseAuth, authEmulatorUrl, {
+      disableWarnings: true,
+    })
+}
+
+if (import.meta.env.DEV && firestore) {
+  const firestoreEmulatorHost = import.meta.env
+    .VITE_FIREBASE_FIRESTORE_EMULATOR_HOST
+  if (firestoreEmulatorHost) {
+    const [host, rawPort] = firestoreEmulatorHost.split(":")
+    const port = Number(rawPort)
+    if (host && Number.isInteger(port) && port > 0)
+      connectFirestoreEmulator(firestore, host, port)
+    else
+      throw new Error(
+        "VITE_FIREBASE_FIRESTORE_EMULATOR_HOST must be formatted as host:port.",
+      )
+  }
+}

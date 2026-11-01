@@ -279,11 +279,17 @@ function PasswordField({
 
 interface LearnerAuthProps {
   view: LearnerView
+  redirectTo: string
   onSwitch: (view: View) => void
   onSuccess: (message: string, warning?: string) => void
 }
 
-function LearnerAuth({ view, onSwitch, onSuccess }: LearnerAuthProps) {
+function LearnerAuth({
+  view,
+  redirectTo,
+  onSwitch,
+  onSuccess,
+}: LearnerAuthProps) {
   const { signIn, signUp, signInWithGoogle, configured } = useAuth()
   const [name, setName] = useState("")
   // Shared by both forms, so switching between sign in and sign up keeps it.
@@ -373,8 +379,9 @@ function LearnerAuth({ view, onSwitch, onSuccess }: LearnerAuthProps) {
     setFormError("")
     setAccountExists(false)
     setPending("google")
-    const result = await signInWithGoogle()
+    const result = await signInWithGoogle(redirectTo)
     setPending(null)
+    if ("redirecting" in result) return
     if (result.ok) onSuccess("Signed in with Google", result.warning)
     else setFormError(result.error)
   }
@@ -707,8 +714,16 @@ export default function SignInPage() {
   const [params, setParams] = useSearchParams()
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, loading, signOut } = useAuth()
+  const {
+    user,
+    loading,
+    signOut,
+    googleRedirectResult,
+    acknowledgeGoogleRedirect,
+  } = useAuth()
   const { toast } = useApp()
+  const [redirectError, setRedirectError] = useState("")
+  const handledRedirect = useRef(false)
   const requested = params.get("view") as View | null
   const view = requested && VIEWS.includes(requested) ? requested : "signin"
 
@@ -734,6 +749,48 @@ export default function SignInPage() {
     if (warning) toast(warning, "error")
     navigate(to, { replace: true })
   }
+
+  useEffect(() => {
+    if (loading || !googleRedirectResult || handledRedirect.current) return
+    handledRedirect.current = true
+    acknowledgeGoogleRedirect()
+
+    if (googleRedirectResult.status === "error") {
+      setRedirectError(googleRedirectResult.error)
+      return
+    }
+
+    let target = "/"
+    try {
+      const requestedTarget = sessionStorage.getItem(
+        "nptel-google-redirect-target",
+      )
+      sessionStorage.removeItem("nptel-google-redirect-target")
+      if (requestedTarget) {
+        const url = new URL(requestedTarget, window.location.origin)
+        const safePath = `${url.pathname}${url.search}${url.hash}`
+        if (
+          url.origin === window.location.origin &&
+          !safePath.startsWith("/signin") &&
+          !safePath.startsWith("/admin")
+        )
+          target = safePath
+      }
+    } catch {
+      setRedirectError(
+        "Google signed you in, but your requested page couldn't be restored.",
+      )
+    }
+
+    finish("Signed in with Google", target, googleRedirectResult.warning)
+  }, [
+    acknowledgeGoogleRedirect,
+    googleRedirectResult,
+    loading,
+    location.state,
+    navigate,
+    toast,
+  ])
 
   if (loading)
     return (
@@ -768,6 +825,7 @@ export default function SignInPage() {
           />
         ) : (
           <>
+            {redirectError && <FormAlert message={redirectError} />}
             {user ? (
               <SignedInCard
                 user={user}
@@ -784,6 +842,7 @@ export default function SignInPage() {
             ) : (
               <LearnerAuth
                 view={view}
+                redirectTo={learnerTarget(location.state)}
                 onSwitch={switchView}
                 onSuccess={(message, warning) =>
                   finish(message, learnerTarget(location.state), warning)
