@@ -8,6 +8,7 @@ import {
   useMatch,
 } from "react-router"
 import { AnnouncementPopup } from "./components/AnnouncementPopup"
+import { AuthDiagnosticsPanel } from "./components/AuthDiagnosticsPanel"
 import { CourseLayout } from "./components/CourseLayout"
 import { OfflineNotice } from "./components/InstallApp"
 import { Navbar } from "./components/Navbar"
@@ -15,6 +16,7 @@ import { AppProvider } from "./lib/app-state"
 import { useApp } from "./lib/app-context"
 import { useAuth } from "./lib/auth-context"
 import { AuthProvider } from "./lib/auth-state"
+import { recordAuthDiagnostic } from "./lib/auth-diagnostics"
 import { coursePath } from "./lib/course-context"
 import { DEFAULT_COURSE_ID } from "./lib/data"
 import { ProgressProvider } from "./lib/progress-state"
@@ -108,9 +110,24 @@ function LegacyRedirect() {
 
 /** The dashboard is admin-only: everyone else goes to the admin sign-in and comes back afterwards. */
 function RequireAdmin({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth()
+  const { user, loading, adminClaimsLoading } = useAuth()
   const location = useLocation()
-  if (loading)
+  useEffect(() => {
+    recordAuthDiagnostic("route.admin-guard", {
+      pathname: location.pathname,
+      authInitialized: !loading,
+      claimsLoading: adminClaimsLoading,
+      userPresent: Boolean(user),
+      role: user?.role ?? null,
+      decision:
+        loading || (Boolean(user) && adminClaimsLoading)
+          ? "wait"
+          : user?.role === "admin"
+            ? "allow"
+            : "redirect-to-admin-signin",
+    })
+  }, [adminClaimsLoading, loading, location.pathname, user])
+  if (loading || (user && adminClaimsLoading))
     return (
       <div className="mx-auto max-w-6xl px-4 py-16 text-center text-sm text-gray-500 dark:text-gray-400">
         Checking admin access…
@@ -158,6 +175,7 @@ export default function App() {
             <MobileSurface />
             <ScrollToTop />
             <LearnerAnnouncement />
+            <AuthDiagnosticsPanel />
             <Aurora />
             <div className="app-frame relative z-10 flex min-h-screen flex-col">
               <Navbar />

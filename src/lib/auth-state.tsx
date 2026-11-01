@@ -9,6 +9,7 @@ import {
   signOut as firebaseSignOut,
   updateProfile,
   getIdTokenResult,
+  type Auth,
   type User,
 } from "firebase/auth"
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore"
@@ -35,6 +36,7 @@ import {
   firebaseConfigured,
   firestore,
 } from "./firebase"
+import { recordAuthDiagnostic } from "./auth-diagnostics"
 
 const configFailure: AuthFailure = {
   ok: false,
@@ -44,6 +46,12 @@ const profileSyncWarning =
   "Your account is signed in, but your profile couldn't sync. Check your connection."
 const googleRedirectTargetKey = "nptel-google-redirect-target"
 const googleProvider = new GoogleAuthProvider()
+let redirectResultPromise: ReturnType<typeof getRedirectResult> | null = null
+
+function getInitialRedirectResult(auth: Auth) {
+  redirectResultPromise ??= getRedirectResult(auth)
+  return redirectResultPromise
+}
 
 function errorCode(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error
@@ -131,16 +139,10 @@ function authFailure(error: unknown): AuthFailure {
   }
 }
 
-async function toSessionUser(user: User): Promise<SessionUser> {
-  let isAdmin = false
-  try {
-    isAdmin = (await getIdTokenResult(user)).claims.admin === true
-  } catch (error) {
-    console.warn(
-      "Could not verify Firebase admin claims; treating user as a learner.",
-      error,
-    )
-  }
+function toSessionUser(
+  user: User,
+  role: SessionUser["role"] = "learner",
+): SessionUser {
   const method = user.providerData.some(
     (provider) => provider.providerId === GoogleAuthProvider.PROVIDER_ID,
   )
@@ -150,7 +152,7 @@ async function toSessionUser(user: User): Promise<SessionUser> {
     id: user.uid,
     name: user.displayName || user.email?.split("@")[0] || "Learner",
     email: user.email ?? "",
-    role: isAdmin ? "admin" : "learner",
+    role,
     method,
   }
 }
@@ -176,115 +178,154 @@ async function createUserProfile(user: User, displayName: string) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null)
   const [loading, setLoading] = useState(firebaseConfigured)
+  const [adminClaimsLoading, setAdminClaimsLoading] = useState(false)
   const [googleRedirectResult, setGoogleRedirectResult] =
     useState<GoogleRedirectResult | null>(null)
 
   useEffect(() => {
     if (!firebaseAuth) {
+      recordAuthDiagnostic("auth.initialization.unavailable", {
+        firebaseConfigured,
+      })
       setLoading(false)
       return
     }
 
+    const auth = firebaseAuth
     let active = true
-    let authStateReady = false
-    let redirectResultReady = false
-    let redirectCompletionStarted = false
-    let observedFirebaseUser: User | null = null
-    const finishInitialLoad = () => {
-      if (active && authStateReady && redirectResultReady) setLoading(false)
-    }
-    const completeRedirect = async (firebaseUser: User) => {
-      if (!active || redirectCompletionStarted) return
-      redirectCompletionStarted = true
-      try {
-        const sessionUser = await toSessionUser(firebaseUser)
-        if (!active) return
-        setUser(sessionUser)
-        let warning: string | undefined
-        try {
-          await createUserProfile(
-            firebaseUser,
-            firebaseUser.displayName || "Learner",
-          )
-        } catch {
-          warning = profileSyncWarning
-        }
-        if (active) setGoogleRedirectResult({ status: "success", warning })
-      } catch (error) {
-        if (active)
-          setGoogleRedirectResult({
-            status: "error",
-            error: authFailure(error).error,
-          })
-      }
-    }
-    const resolveRedirectFromAuthState = () => {
-      if (
-        !active ||
-        !authStateReady ||
-        !redirectResultReady ||
-        redirectCompletionStarted
-      )
-        return
-
-      let hasRedirectTarget = false
-      try {
-        hasRedirectTarget = Boolean(
-          sessionStorage.getItem(googleRedirectTargetKey),
-        )
-      } catch {
-        // The redirect result itself still works if session storage is blocked.
-      }
-      if (hasRedirectTarget && observedFirebaseUser) {
-        void completeRedirect(observedFirebaseUser)
-      } else if (hasRedirectTarget) {
-        try {
-          sessionStorage.removeItem(googleRedirectTargetKey)
-        } catch {
-          // There is no authenticated user to return to the saved page.
-        }
-      }
-    }
+    let authEventSequence = 0
+    let initializationCompleted = false
+    const syncingProfiles = new Set<string>()
+    recordAuthDiagnostic("auth.initialization.started", {
+      currentUserPresent: Boolean(auth.currentUser),
+      persistence: "browserLocalPersistence",
+    })
+    recordAuthDiagnostic("auth.state-listener.registered")
     const unsubscribe = onAuthStateChanged(
-      firebaseAuth,
-      async (firebaseUser) => {
-        observedFirebaseUser = firebaseUser
-        try {
-          const next = firebaseUser ? await toSessionUser(firebaseUser) : null
-          if (active) {
-            setUser(next)
-            authStateReady = true
-            resolveRedirectFromAuthState()
-            finishInitialLoad()
-          }
-        } catch {
-          if (active) {
-            setUser(null)
-            observedFirebaseUser = null
-            authStateReady = true
-            resolveRedirectFromAuthState()
-            finishInitialLoad()
-          }
+      auth,
+      (firebaseUser) => {
+        if (!active) return
+        const eventSequence = ++authEventSequence
+        const userPresent = Boolean(firebaseUser)
+        recordAuthDiagnostic("auth.state.changed", {
+          userPresent,
+          providerIds:
+            firebaseUser?.providerData
+              .map(({ providerId }) => providerId)
+              .join(",") || null,
+          currentUserPresent: Boolean(auth.currentUser),
+          eventSequence,
+        })
+
+        // Publish the Firebase session before any network-dependent claim or profile work.
+        setUser(firebaseUser ? toSessionUser(firebaseUser) : null)
+        setLoading(false)
+        setAdminClaimsLoading(Boolean(firebaseUser))
+        recordAuthDiagnostic("auth.state.processed", {
+          userPresent,
+          currentUserPresent: Boolean(auth.currentUser),
+          eventSequence,
+        })
+        if (!initializationCompleted) {
+          initializationCompleted = true
+          recordAuthDiagnostic("auth.initialization.completed", {
+            userPresent,
+            eventSequence,
+          })
         }
+
+        if (!firebaseUser) return
+
+        const uid = firebaseUser.uid
+        recordAuthDiagnostic("auth.id-token.started", {
+          eventSequence,
+        })
+        void getIdTokenResult(firebaseUser)
+          .then((token) => {
+            const isAdmin = token.claims.admin === true
+            recordAuthDiagnostic("auth.id-token.completed", {
+              adminClaim: isAdmin,
+              eventSequence,
+            })
+            if (active && authEventSequence === eventSequence)
+              setUser((current) =>
+                current?.id === uid
+                  ? { ...current, role: isAdmin ? "admin" : "learner" }
+                  : current,
+              )
+          })
+          .catch((error: unknown) => {
+            recordAuthDiagnostic("auth.id-token.error", {
+              errorCode: errorCode(error) || "unknown",
+              eventSequence,
+            })
+          })
+          .finally(() => {
+            if (active && authEventSequence === eventSequence)
+              setAdminClaimsLoading(false)
+          })
+
+        if (syncingProfiles.has(uid)) return
+        syncingProfiles.add(uid)
+        recordAuthDiagnostic("auth.profile-sync.started", {
+          eventSequence,
+        })
+        void createUserProfile(
+          firebaseUser,
+          firebaseUser.displayName || "Learner",
+        )
+          .then(() =>
+            recordAuthDiagnostic("auth.profile-sync.completed", {
+              eventSequence,
+            }),
+          )
+          .catch((error: unknown) => {
+            recordAuthDiagnostic("auth.profile-sync.error", {
+              errorCode: errorCode(error) || "unknown",
+              eventSequence,
+            })
+            console.warn(profileSyncWarning)
+          })
+          .finally(() => syncingProfiles.delete(uid))
       },
-      () => {
-        if (active) {
-          setUser(null)
-          observedFirebaseUser = null
-          authStateReady = true
-          resolveRedirectFromAuthState()
-          finishInitialLoad()
+      (error) => {
+        if (!active) return
+        recordAuthDiagnostic("auth.state.error", {
+          errorCode: errorCode(error) || "unknown",
+          currentUserPresent: Boolean(auth.currentUser),
+        })
+        const currentUser = auth.currentUser
+        if (currentUser) setUser(toSessionUser(currentUser))
+        setLoading(false)
+        setAdminClaimsLoading(false)
+        if (!initializationCompleted) {
+          initializationCompleted = true
+          recordAuthDiagnostic("auth.initialization.completed", {
+            userPresent: Boolean(currentUser),
+            observerError: true,
+          })
         }
       },
     )
 
-    void getRedirectResult(firebaseAuth)
+    recordAuthDiagnostic("auth.redirect-result.started", {
+      currentUserPresent: Boolean(auth.currentUser),
+    })
+    void getInitialRedirectResult(auth)
       .then((credential) => {
         if (!active) return
-        if (credential) void completeRedirect(credential.user)
+        recordAuthDiagnostic("auth.redirect-result.completed", {
+          returnedUser: Boolean(credential?.user),
+          currentUserPresent: Boolean(auth.currentUser),
+        })
+        if (credential) setGoogleRedirectResult({ status: "success" })
       })
       .catch((error: unknown) => {
         if (!active) return
+        recordAuthDiagnostic("auth.redirect-result.error", {
+          errorCode: errorCode(error) || "unknown",
+          currentUserPresent: Boolean(auth.currentUser),
+        })
         try {
           sessionStorage.removeItem(googleRedirectTargetKey)
         } catch {
@@ -294,11 +335,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           status: "error",
           error: authFailure(error).error,
         })
-      })
-      .finally(() => {
-        redirectResultReady = true
-        resolveRedirectFromAuthState()
-        finishInitialLoad()
       })
 
     return () => {
@@ -316,9 +352,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email.trim(),
           password,
         )
-        const sessionUser = await toSessionUser(credential.user)
-        setUser(sessionUser)
-        setLoading(false)
+        const sessionUser = toSessionUser(credential.user)
         return { ok: true, user: sessionUser }
       } catch (error) {
         return authFailure(error)
@@ -340,16 +374,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let warning: string | undefined
         try {
           await updateProfile(credential.user, { displayName })
-          await createUserProfile(credential.user, displayName)
         } catch (error) {
           warning = profileSyncWarning
         }
+        void createUserProfile(credential.user, displayName)
+          .then(() =>
+            recordAuthDiagnostic("auth.profile-sync.completed", {
+              stage: "sign-up",
+            }),
+          )
+          .catch((error: unknown) => {
+            recordAuthDiagnostic("auth.profile-sync.error", {
+              errorCode: errorCode(error) || "unknown",
+              stage: "sign-up",
+            })
+          })
         const sessionUser = {
-          ...(await toSessionUser(credential.user)),
+          ...toSessionUser(credential.user),
           name: displayName,
         }
-        setUser(sessionUser)
-        setLoading(false)
         return { ok: true, user: sessionUser, warning }
       } catch (error) {
         return authFailure(error)
@@ -361,23 +404,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = useCallback(
     async (redirectTo: string): Promise<GoogleAuthResult> => {
       if (!firebaseAuth) return configFailure
+      recordAuthDiagnostic("google.button.requested", {
+        currentUserPresent: Boolean(firebaseAuth.currentUser),
+      })
       try {
+        recordAuthDiagnostic("google.popup.invoked", {
+          currentUserPresent: Boolean(firebaseAuth.currentUser),
+        })
         const credential = await signInWithPopup(firebaseAuth, googleProvider)
-        const sessionUser = await toSessionUser(credential.user)
-        setUser(sessionUser)
-        setLoading(false)
-        let warning: string | undefined
-        try {
-          await createUserProfile(
-            credential.user,
-            credential.user.displayName || "Learner",
-          )
-        } catch (error) {
-          warning = profileSyncWarning
-        }
-        return { ok: true, user: sessionUser, warning }
+        recordAuthDiagnostic("google.popup.completed", {
+          returnedUser: Boolean(credential.user),
+          currentUserPresent: Boolean(firebaseAuth.currentUser),
+        })
+        return { ok: true, user: toSessionUser(credential.user) }
       } catch (error) {
         const code = errorCode(error)
+        recordAuthDiagnostic("google.popup.error", {
+          errorCode: code || "unknown",
+          currentUserPresent: Boolean(firebaseAuth.currentUser),
+        })
         if (
           code === "auth/popup-blocked" ||
           code === "auth/operation-not-supported-in-this-environment"
@@ -385,6 +430,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           try {
             sessionStorage.setItem(googleRedirectTargetKey, redirectTo)
           } catch {
+            recordAuthDiagnostic("google.redirect-target-storage.error", {
+              stage: "before-redirect",
+            })
             return {
               ok: false,
               error:
@@ -392,9 +440,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           }
           try {
+            recordAuthDiagnostic("google.redirect.invoked", {
+              currentUserPresent: Boolean(firebaseAuth.currentUser),
+            })
             await signInWithRedirect(firebaseAuth, googleProvider)
+            recordAuthDiagnostic("google.redirect.returned", {
+              currentUserPresent: Boolean(firebaseAuth.currentUser),
+            })
             return { redirecting: true }
           } catch (redirectError) {
+            recordAuthDiagnostic("google.redirect.error", {
+              errorCode: errorCode(redirectError) || "unknown",
+              currentUserPresent: Boolean(firebaseAuth.currentUser),
+            })
             try {
               sessionStorage.removeItem(googleRedirectTargetKey)
             } catch {
@@ -419,8 +477,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await signIn(email, password)
       if (!result.ok || !firebaseAuth?.currentUser) return result
       try {
+        recordAuthDiagnostic("admin.claims.refresh.started", {
+          currentUserPresent: true,
+        })
         const token = await getIdTokenResult(firebaseAuth.currentUser, true)
-        if (token.claims.admin === true) {
+        const isAdmin = token.claims.admin === true
+        recordAuthDiagnostic("admin.claims.refresh.completed", {
+          adminClaim: isAdmin,
+        })
+        if (isAdmin) {
           const adminUser = {
             ...result.user,
             role: "admin" as const,
@@ -437,6 +502,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           error: "This account doesn't have admin access.",
         }
       } catch (error) {
+        recordAuthDiagnostic("admin.claims.refresh.error", {
+          errorCode: errorCode(error) || "unknown",
+        })
         return authFailure(error)
       }
     },
@@ -446,9 +514,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async (): Promise<string | null> => {
     if (!firebaseAuth) return configFailure.error
     try {
+      recordAuthDiagnostic("auth.sign-out.requested", {
+        currentUserPresent: Boolean(firebaseAuth.currentUser),
+      })
       await firebaseSignOut(firebaseAuth)
+      recordAuthDiagnostic("auth.sign-out.completed", {
+        currentUserPresent: Boolean(firebaseAuth.currentUser),
+      })
       return null
     } catch (error) {
+      recordAuthDiagnostic("auth.sign-out.error", {
+        errorCode: errorCode(error) || "unknown",
+      })
       return authFailure(error).error
     }
   }, [])
@@ -457,6 +534,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       loading,
+      adminClaimsLoading,
       configured: firebaseConfigured,
       googleRedirectResult,
       signIn,
@@ -469,6 +547,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [
       user,
       loading,
+      adminClaimsLoading,
       googleRedirectResult,
       signIn,
       signUp,

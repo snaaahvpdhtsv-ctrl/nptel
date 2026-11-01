@@ -26,6 +26,7 @@ import {
   Sparkles,
 } from "lucide-react"
 import { useApp } from "../lib/app-context"
+import { recordAuthDiagnostic } from "../lib/auth-diagnostics"
 import {
   firstName,
   initialOf,
@@ -397,15 +398,31 @@ function LearnerAuth({
 
   const continueWithGoogle = async () => {
     if (busy) return
+    recordAuthDiagnostic("google.button.clicked", {
+      redirectTargetPath: redirectTo.split(/[?#]/, 1)[0],
+    })
     setErrors({})
     setFormError("")
     setAccountExists(false)
     setPending("google")
     const result = await signInWithGoogle(redirectTo)
     setPending(null)
-    if ("redirecting" in result) return
-    if (result.ok) onSuccess("Signed in with Google", result.warning)
-    else setFormError(result.error)
+    if ("redirecting" in result) {
+      recordAuthDiagnostic("google.button.redirecting", {})
+      return
+    }
+    if (result.ok) {
+      recordAuthDiagnostic("google.button.success", {
+        userPresent: true,
+        role: result.user.role,
+      })
+      onSuccess("Signed in with Google", result.warning)
+    } else {
+      recordAuthDiagnostic("google.button.failure", {
+        failure: true,
+      })
+      setFormError(result.error)
+    }
   }
 
   return (
@@ -739,6 +756,7 @@ export default function SignInPage() {
   const {
     user,
     loading,
+    adminClaimsLoading,
     signOut,
     googleRedirectResult,
     acknowledgeGoogleRedirect,
@@ -746,6 +764,7 @@ export default function SignInPage() {
   const { toast } = useApp()
   const [redirectError, setRedirectError] = useState("")
   const handledRedirect = useRef(false)
+  const redirectNavigationStarted = useRef(false)
   const requested = params.get("view") as View | null
   const view = requested && VIEWS.includes(requested) ? requested : "signin"
 
@@ -767,27 +786,56 @@ export default function SignInPage() {
 
   const finish = (message: string, to: string, warning?: string) => {
     if (!alive.current) return
+    recordAuthDiagnostic("route.navigation", {
+      destinationPath: to.split(/[?#]/, 1)[0],
+      reason: message,
+      userPresent: Boolean(user),
+    })
     toast(message)
     if (warning) toast(warning, "error")
     navigate(to, { replace: true })
   }
 
   useEffect(() => {
+    recordAuthDiagnostic("route.signin-state", {
+      pathname: location.pathname,
+      loading,
+      userPresent: Boolean(user),
+      userRole: user?.role ?? null,
+      adminClaimsLoading,
+      redirectResult: googleRedirectResult?.status ?? null,
+    })
+  }, [
+    adminClaimsLoading,
+    googleRedirectResult,
+    loading,
+    location.pathname,
+    user,
+  ])
+
+  useEffect(() => {
     if (
       loading ||
       !user ||
       view === "admin" ||
+      redirectNavigationStarted.current ||
       googleRedirectResult?.status === "success"
     )
       return
 
-    navigate(takeGoogleRedirectTarget() ?? learnerTarget(location.state), {
-      replace: true,
+    const destination =
+      takeGoogleRedirectTarget() ?? learnerTarget(location.state)
+    recordAuthDiagnostic("route.navigation", {
+      destinationPath: destination.split(/[?#]/, 1)[0],
+      reason: "authenticated-user-left-signin",
+      userPresent: true,
     })
+    navigate(destination, { replace: true })
   }, [googleRedirectResult, loading, location.state, navigate, user, view])
 
   useEffect(() => {
     if (loading || !googleRedirectResult || handledRedirect.current) return
+    if (googleRedirectResult.status === "success" && !user) return
     handledRedirect.current = true
     acknowledgeGoogleRedirect()
 
@@ -796,6 +844,7 @@ export default function SignInPage() {
       return
     }
 
+    redirectNavigationStarted.current = true
     const target = takeGoogleRedirectTarget() ?? learnerTarget(location.state)
     finish("Signed in with Google", target, googleRedirectResult.warning)
   }, [
@@ -807,7 +856,7 @@ export default function SignInPage() {
     toast,
   ])
 
-  if (loading)
+  if (loading || (view === "admin" && user && adminClaimsLoading))
     return (
       <div
         className="learner-page learner-auth mx-auto max-w-md px-4 py-12 sm:py-16"

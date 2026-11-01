@@ -56,6 +56,7 @@ export interface AuthState {
   /** The signed-in learner or admin, or null when signed out. */
   user: SessionUser | null
   loading: boolean
+  adminClaimsLoading: boolean
   configured: boolean
   googleRedirectResult: GoogleRedirectResult | null
   signIn: (email: string, password: string) => Promise<AuthResult>

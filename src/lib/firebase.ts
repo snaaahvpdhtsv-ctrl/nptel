@@ -12,6 +12,7 @@ import {
   getFirestore,
   type Firestore,
 } from "firebase/firestore"
+import { recordAuthDiagnostic } from "./auth-diagnostics"
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -27,6 +28,30 @@ export const firebaseConfigured = requiredConfig.length === 0
 export const firebaseConfigError = firebaseConfigured
   ? ""
   : `Firebase configuration is missing: ${requiredConfig.map(([key]) => key).join(", ")}.`
+
+function browserStorageAvailable(kind: "local" | "session") {
+  try {
+    const storage =
+      kind === "local" ? window.localStorage : window.sessionStorage
+    const key = "__nptel_auth_storage_check__"
+    storage.setItem(key, "1")
+    storage.removeItem(key)
+    return true
+  } catch {
+    return false
+  }
+}
+
+recordAuthDiagnostic("firebase.initialize", {
+  configured: firebaseConfigured,
+  missingConfigCount: requiredConfig.length,
+  authDomain: config.authDomain || null,
+  origin: typeof window === "undefined" ? null : window.location.origin,
+  localStorageAvailable:
+    typeof window !== "undefined" && browserStorageAvailable("local"),
+  sessionStorageAvailable:
+    typeof window !== "undefined" && browserStorageAvailable("session"),
+})
 
 const app = firebaseConfigured
   ? getApps().length
@@ -47,7 +72,13 @@ if (app) {
       error.code === "auth/already-initialized"
     ) {
       authInstance = getAuth(app)
+      recordAuthDiagnostic("firebase.auth.reused", {
+        persistenceConfiguredByThisModule: false,
+      })
     } else {
+      recordAuthDiagnostic("firebase.auth.initialize.error", {
+        errorCode: error instanceof FirebaseError ? error.code : "unknown",
+      })
       throw error
     }
   }
@@ -56,6 +87,12 @@ if (app) {
 export const firebaseApp = app
 export const firebaseAuth = authInstance
 export const firestore = app ? getFirestore(app) : null
+
+recordAuthDiagnostic("firebase.auth.initialized", {
+  available: Boolean(firebaseAuth),
+  persistence: firebaseAuth ? "browserLocalPersistence" : null,
+  popupRedirectResolver: Boolean(firebaseAuth),
+})
 
 if (import.meta.env.DEV && firebaseAuth) {
   const authEmulatorUrl = import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_URL
