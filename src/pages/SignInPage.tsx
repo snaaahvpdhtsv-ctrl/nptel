@@ -84,6 +84,28 @@ function adminTarget(state: unknown) {
   return path?.startsWith("/admin/dashboard") ? path : "/admin/dashboard"
 }
 
+function takeGoogleRedirectTarget() {
+  try {
+    const requestedTarget = sessionStorage.getItem(
+      "nptel-google-redirect-target",
+    )
+    sessionStorage.removeItem("nptel-google-redirect-target")
+    if (!requestedTarget) return null
+
+    const url = new URL(requestedTarget, window.location.origin)
+    const safePath = `${url.pathname}${url.search}${url.hash}`
+    return url.origin === window.location.origin &&
+      safePath.startsWith("/") &&
+      !safePath.startsWith("//") &&
+      !safePath.startsWith("/signin") &&
+      !safePath.startsWith("/admin")
+      ? safePath
+      : null
+  } catch {
+    return null
+  }
+}
+
 /** Google's multicolor "G". Brand colors are the one place raw hex values are used. */
 function GoogleIcon() {
   return (
@@ -751,6 +773,20 @@ export default function SignInPage() {
   }
 
   useEffect(() => {
+    if (
+      loading ||
+      !user ||
+      view === "admin" ||
+      googleRedirectResult?.status === "success"
+    )
+      return
+
+    navigate(takeGoogleRedirectTarget() ?? learnerTarget(location.state), {
+      replace: true,
+    })
+  }, [googleRedirectResult, loading, location.state, navigate, user, view])
+
+  useEffect(() => {
     if (loading || !googleRedirectResult || handledRedirect.current) return
     handledRedirect.current = true
     acknowledgeGoogleRedirect()
@@ -760,28 +796,7 @@ export default function SignInPage() {
       return
     }
 
-    let target = "/"
-    try {
-      const requestedTarget = sessionStorage.getItem(
-        "nptel-google-redirect-target",
-      )
-      sessionStorage.removeItem("nptel-google-redirect-target")
-      if (requestedTarget) {
-        const url = new URL(requestedTarget, window.location.origin)
-        const safePath = `${url.pathname}${url.search}${url.hash}`
-        if (
-          url.origin === window.location.origin &&
-          !safePath.startsWith("/signin") &&
-          !safePath.startsWith("/admin")
-        )
-          target = safePath
-      }
-    } catch {
-      setRedirectError(
-        "Google signed you in, but your requested page couldn't be restored.",
-      )
-    }
-
+    const target = takeGoogleRedirectTarget() ?? learnerTarget(location.state)
     finish("Signed in with Google", target, googleRedirectResult.warning)
   }, [
     acknowledgeGoogleRedirect,

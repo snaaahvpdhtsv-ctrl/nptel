@@ -132,7 +132,15 @@ function authFailure(error: unknown): AuthFailure {
 }
 
 async function toSessionUser(user: User): Promise<SessionUser> {
-  const token = await getIdTokenResult(user)
+  let isAdmin = false
+  try {
+    isAdmin = (await getIdTokenResult(user)).claims.admin === true
+  } catch (error) {
+    console.warn(
+      "Could not verify Firebase admin claims; treating user as a learner.",
+      error,
+    )
+  }
   const method = user.providerData.some(
     (provider) => provider.providerId === GoogleAuthProvider.PROVIDER_ID,
   )
@@ -142,7 +150,7 @@ async function toSessionUser(user: User): Promise<SessionUser> {
     id: user.uid,
     name: user.displayName || user.email?.split("@")[0] || "Learner",
     email: user.email ?? "",
-    role: token.claims.admin === true ? "admin" : "learner",
+    role: isAdmin ? "admin" : "learner",
     method,
   }
 }
@@ -271,9 +279,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     )
 
     void getRedirectResult(firebaseAuth)
-      .then(async (credential) => {
+      .then((credential) => {
         if (!active) return
-        if (credential) await completeRedirect(credential.user)
+        if (credential) void completeRedirect(credential.user)
       })
       .catch((error: unknown) => {
         if (!active) return
