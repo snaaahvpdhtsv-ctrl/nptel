@@ -152,8 +152,9 @@ export default function MorePage() {
                       type="button"
                       className="btn-outline"
                       onClick={() => {
-                        signOut()
-                        toast("Signed out")
+                        void signOut().then((error) =>
+                          error ? toast(error, "error") : toast("Signed out"),
+                        )
                       }}
                     >
                       <LogOut size={16} />

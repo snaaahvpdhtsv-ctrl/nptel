@@ -306,9 +306,12 @@ export default function AdminPage() {
     // transition leaves the dashboard before its guard redirects to the admin sign-in.
     startTransition(() => {
       navigate("/", { replace: true })
-      signOut()
+      void signOut().then((error) =>
+        error
+          ? toast(error, "error")
+          : toast("Signed out of the admin account"),
+      )
     })
-    toast("Signed out of the admin preview")
   }
 
   const badges: Partial<Record<SectionId, NavBadge>> = {

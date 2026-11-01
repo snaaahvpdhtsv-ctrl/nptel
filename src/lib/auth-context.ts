@@ -21,6 +21,7 @@ export interface SignUpInput {
 export interface AuthSuccess {
   ok: true
   user: SessionUser
+  warning?: string
 }
 
 export interface AuthFailure {
@@ -37,25 +38,14 @@ export type AuthResult = AuthSuccess | AuthFailure
 export interface AuthState {
   /** The signed-in learner or admin, or null when signed out. */
   user: SessionUser | null
+  loading: boolean
+  configured: boolean
   signIn: (email: string, password: string) => Promise<AuthResult>
   signUp: (input: SignUpInput) => Promise<AuthResult>
   signInWithGoogle: () => Promise<AuthResult>
   signInAdmin: (email: string, password: string) => Promise<AuthResult>
-  signOut: () => void
+  signOut: () => Promise<string | null>
 }
-
-/** Preview-only admin account. It ships in the bundle, so it is public by design. */
-export const PREVIEW_ADMIN = {
-  name: "Admin",
-  email: "admin@nptelquiz.app",
-  password: "admin123",
-} as const
-
-/** Identity used by the simulated "Continue with Google". */
-export const PREVIEW_GOOGLE = {
-  name: "Google Learner",
-  email: "learner@gmail.com",
-} as const
 
 export const firstName = (name: string) => name.trim().split(/\s+/)[0] || name
 

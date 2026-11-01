@@ -108,8 +108,14 @@ function LegacyRedirect() {
 
 /** The dashboard is admin-only: everyone else goes to the admin sign-in and comes back afterwards. */
 function RequireAdmin({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const location = useLocation()
+  if (loading)
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-16 text-center text-sm text-gray-500 dark:text-gray-400">
+        Checking admin access…
+      </div>
+    )
   if (user?.role !== "admin")
     return (
       <Navigate to="/signin?view=admin" replace state={{ from: location }} />

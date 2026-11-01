@@ -29,7 +29,6 @@ import { useApp } from "../lib/app-context"
 import {
   firstName,
   initialOf,
-  PREVIEW_ADMIN,
   useAuth,
   type AuthFailure,
   type AuthField,
@@ -281,11 +280,11 @@ function PasswordField({
 interface LearnerAuthProps {
   view: LearnerView
   onSwitch: (view: View) => void
-  onSuccess: (message: string) => void
+  onSuccess: (message: string, warning?: string) => void
 }
 
 function LearnerAuth({ view, onSwitch, onSuccess }: LearnerAuthProps) {
-  const { signIn, signUp, signInWithGoogle } = useAuth()
+  const { signIn, signUp, signInWithGoogle, configured } = useAuth()
   const [name, setName] = useState("")
   // Shared by both forms, so switching between sign in and sign up keeps it.
   const [email, setEmail] = useState("")
@@ -364,6 +363,7 @@ function LearnerAuth({ view, onSwitch, onSuccess }: LearnerAuthProps) {
       signingUp
         ? `Account created — welcome, ${first}`
         : `Welcome back, ${first}`,
+      result.warning,
     )
   }
 
@@ -375,7 +375,7 @@ function LearnerAuth({ view, onSwitch, onSuccess }: LearnerAuthProps) {
     setPending("google")
     const result = await signInWithGoogle()
     setPending(null)
-    if (result.ok) onSuccess("Signed in with Google (preview)")
+    if (result.ok) onSuccess("Signed in with Google", result.warning)
     else setFormError(result.error)
   }
 
@@ -426,6 +426,9 @@ function LearnerAuth({ view, onSwitch, onSuccess }: LearnerAuthProps) {
           ? "Connecting to Google…"
           : "Continue with Google"}
       </button>
+      {!configured && (
+        <FormAlert message="Firebase authentication is not configured for this deployment." />
+      )}
 
       <div className="my-5 flex items-center gap-3 text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
         <span
@@ -524,8 +527,8 @@ function LearnerAuth({ view, onSwitch, onSuccess }: LearnerAuthProps) {
 
       <p className="mt-4 flex items-start gap-2 rounded-xl bg-gray-50 px-3 py-2.5 text-xs text-gray-500 dark:bg-white/[0.035] dark:text-gray-400">
         <Info size={14} className="mt-0.5 shrink-0" />
-        Preview: accounts are saved only in this browser. Don't use a password
-        you use elsewhere.
+        Your account is managed securely by Firebase. You can browse published
+        courses without signing in.
       </p>
     </>
   )
@@ -592,26 +595,9 @@ function AdminAuth({ signedInAs, onBack, onSuccess }: AdminAuthProps) {
         </p>
       )}
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-xl border border-dashed border-gray-300 px-3 py-2.5 text-xs text-gray-500 dark:border-white/15 dark:text-gray-400">
-        <span>
-          Preview admin:{" "}
-          <span className="font-medium text-gray-700 dark:text-gray-200">
-            {PREVIEW_ADMIN.email}
-          </span>{" "}
-          · {PREVIEW_ADMIN.password}
-        </span>
-        <button
-          type="button"
-          onClick={() => {
-            setEmail(PREVIEW_ADMIN.email)
-            setPassword(PREVIEW_ADMIN.password)
-            setErrors({})
-            setFormError("")
-          }}
-          className={textLink}
-        >
-          Use demo credentials
-        </button>
+      <div className="mt-6 rounded-xl border border-dashed border-gray-300 px-3 py-2.5 text-xs text-gray-500 dark:border-white/15 dark:text-gray-400">
+        Admin access is granted by a trusted administrator and verified by
+        Firebase. A regular account cannot access the dashboard.
       </div>
 
       <form onSubmit={submit} noValidate className="mt-5 space-y-4">
@@ -721,7 +707,7 @@ export default function SignInPage() {
   const [params, setParams] = useSearchParams()
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, signOut } = useAuth()
+  const { user, loading, signOut } = useAuth()
   const { toast } = useApp()
   const requested = params.get("view") as View | null
   const view = requested && VIEWS.includes(requested) ? requested : "signin"
@@ -742,11 +728,24 @@ export default function SignInPage() {
       state: location.state,
     })
 
-  const finish = (message: string, to: string) => {
+  const finish = (message: string, to: string, warning?: string) => {
     if (!alive.current) return
     toast(message)
+    if (warning) toast(warning, "error")
     navigate(to, { replace: true })
   }
+
+  if (loading)
+    return (
+      <div
+        className="learner-page learner-auth mx-auto max-w-md px-4 py-12 sm:py-16"
+        role="status"
+      >
+        <div className="card p-6 text-center text-sm text-gray-500 dark:text-gray-400">
+          Checking your sign-in…
+        </div>
+      </div>
+    )
 
   if (view === "admin" && user?.role === "admin")
     return <Navigate to={adminTarget(location.state)} replace />
@@ -777,16 +776,17 @@ export default function SignInPage() {
                 }
                 onDashboard={() => navigate("/admin/dashboard")}
                 onSignOut={() => {
-                  signOut()
-                  toast("Signed out")
+                  void signOut().then((error) =>
+                    error ? toast(error, "error") : toast("Signed out"),
+                  )
                 }}
               />
             ) : (
               <LearnerAuth
                 view={view}
                 onSwitch={switchView}
-                onSuccess={(message) =>
-                  finish(message, learnerTarget(location.state))
+                onSuccess={(message, warning) =>
+                  finish(message, learnerTarget(location.state), warning)
                 }
               />
             )}

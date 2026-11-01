@@ -107,9 +107,10 @@ export function Navbar() {
     // leaves admin pages before the dashboard guard can bounce to the admin sign-in.
     startTransition(() => {
       if (pathname.startsWith("/admin")) navigate("/", { replace: true })
-      signOut()
+      void signOut().then((error) =>
+        error ? toast(error, "error") : toast("Signed out"),
+      )
     })
-    toast("Signed out")
   }
 
   const current = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname
