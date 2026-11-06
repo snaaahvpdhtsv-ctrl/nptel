@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Link, useNavigate } from "react-router"
+import { Link } from "react-router"
 import { BookOpen, FileText, LayoutGrid, Zap } from "lucide-react"
 import {
   BackLink,
@@ -8,13 +8,8 @@ import {
   PageHeader,
   SearchInput,
 } from "../components/common"
-import {
-  QuizSettings,
-  SelectableCard,
-  StartBar,
-} from "../components/SelectSetup"
 import { useCourse } from "../lib/course-context"
-import { paperGradients, type Paper } from "../lib/data"
+import type { Paper } from "../lib/data"
 
 const meta = (paper: Pick<Paper, "year" | "session">) =>
   [paper.year, paper.session].filter(Boolean).join(" · ")
@@ -34,14 +29,14 @@ export function PyqLandingPage() {
   const tracks = [
     {
       title: "PYQ Answers",
-      desc: "Study previous-year questions with correct answers and available explanations.",
+      desc: "Study verified questions, options, correct answers, and explanations.",
       icon: BookOpen,
       to: path("/pyq/answers"),
       gradient: "from-blue-500 to-teal-500",
     },
     {
       title: "Practice PYQs",
-      desc: "Practise previous-year questions through interactive quizzes.",
+      desc: "PYQ quiz mode is not available yet. Review verified questions in the answer key.",
       icon: Zap,
       to: path("/pyq/practice"),
       gradient: "from-orange-500 to-purple-600",
@@ -54,7 +49,7 @@ export function PyqLandingPage() {
       <PageHeader
         icon={FileText}
         title="Previous Year Questions"
-        subtitle="Study past papers and practise for exams"
+        subtitle="Browse previous-year paper listings"
         gradient="purple"
       />
       <div className="pyq-tracks grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-3xl">
@@ -131,7 +126,8 @@ export function PyqAnswersPage() {
                   </div>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-3 inline-flex items-center gap-1.5">
                     <LayoutGrid size={13} />
-                    {paper.questionCount} questions
+                    {paper.questionCount} verified question
+                    {paper.questionCount === 1 ? "" : "s"}
                   </p>
                 </Link>
               ))}
@@ -144,113 +140,32 @@ export function PyqAnswersPage() {
 }
 
 export function PyqPracticePage() {
-  const navigate = useNavigate()
-  const { path, publishedPapers: allPapers } = useCourse()
-  const [selected, setSelected] = useState<string[]>([])
-  const [shuffleQuestions, setShuffleQuestions] = useState(true)
-  const [shuffleOptions, setShuffleOptions] = useState(false)
-  const toggle = (id: string) =>
-    setSelected((current) =>
-      current.includes(id)
-        ? current.filter((item) => item !== id)
-        : [...current, id],
-    )
-  const total = allPapers
-    .filter((paper) => selected.includes(paper.id))
-    .reduce((sum, paper) => sum + paper.questionCount, 0)
-
+  const { path, publishedPapers } = useCourse()
   return (
     <div className="learner-page pyq-page max-w-6xl mx-auto px-4 py-8">
       <BackLink to={path("/pyq")} label="PYQs" />
       <PageHeader
         icon={Zap}
         title="Practice PYQs"
-        subtitle="Select papers to practise, then customize your quiz."
+        subtitle="Practice quiz mode for PYQ papers is not available yet."
         gradient="orange"
       />
-      {allPapers.length === 0 ? (
+      {publishedPapers.length === 0 ? (
         <NoPapers />
       ) : (
-        <>
-          <div className="selection-toolbar flex items-center justify-between mb-4">
-            <h2 className="selection-heading text-lg font-bold font-display text-gray-800 dark:text-white">
-              Select papers to practise
-            </h2>
-            <div className="flex items-center gap-2">
-              {selected.length > 0 && (
-                <button
-                  onClick={() => setSelected([])}
-                  className="btn-ghost !py-1.5 !px-3 !text-xs"
-                >
-                  Clear ({selected.length})
-                </button>
-              )}
-              <button
-                onClick={() =>
-                  setSelected((current) =>
-                    current.length === allPapers.length
-                      ? []
-                      : allPapers.map((paper) => paper.id),
-                  )
-                }
-                className="btn-outline !py-1.5 !px-3 !text-xs"
-              >
-                {selected.length === allPapers.length
-                  ? "Deselect all"
-                  : "Select all"}
-              </button>
-            </div>
-          </div>
-          <div className="selection-list grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {allPapers.map((paper, index) => (
-              <SelectableCard
-                key={paper.id}
-                gradient={paperGradients[index % paperGradients.length]}
-                index={index}
-                selected={selected.includes(paper.id)}
-                onToggle={() => toggle(paper.id)}
-                eyebrow={
-                  <p className="text-sm opacity-80 font-medium flex items-center gap-1.5">
-                    <FileText size={13} />
-                    {meta(paper) || "PYQ Paper"}
-                  </p>
-                }
-                title={paper.title}
-                meta={meta(paper) || "PYQ Paper"}
-                questionCount={paper.questionCount}
-              />
-            ))}
-          </div>
-        </>
+        <EmptyState icon={Zap} title="PYQ practice quiz isn't available yet">
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            Verified questions are available in the PYQ answer key. Interactive
+            quiz history for papers has not been implemented.
+          </p>
+          <Link
+            to={path("/pyq/answers")}
+            className="btn-outline mt-4 inline-flex min-h-[44px] items-center"
+          >
+            Browse paper listings
+          </Link>
+        </EmptyState>
       )}
-      <QuizSettings
-        tip="Tip: pick one paper for a focused quiz, or several for a combined test."
-        shuffleQuestions={shuffleQuestions}
-        setShuffleQuestions={setShuffleQuestions}
-        shuffleOptions={shuffleOptions}
-        setShuffleOptions={setShuffleOptions}
-      />
-      <StartBar
-        summary={
-          selected.length === 0 ? (
-            "No papers selected"
-          ) : (
-            <>
-              {selected.length} paper{selected.length === 1 ? "" : "s"} selected
-              <span className="text-gray-500 dark:text-gray-400 font-normal">
-                {" "}
-                · {total} questions
-              </span>
-            </>
-          )
-        }
-        shuffleQuestions={shuffleQuestions}
-        shuffleOptions={shuffleOptions}
-        disabled={selected.length === 0}
-        onStart={() =>
-          navigate(path(`/pyq/practice/run?papers=${selected.join(",")}`))
-        }
-      />
     </div>
   )
 }

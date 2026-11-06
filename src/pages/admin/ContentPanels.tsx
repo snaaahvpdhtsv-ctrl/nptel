@@ -15,7 +15,6 @@ import {
   EyeOff,
   PenLine,
   Plus,
-  RefreshCw,
   Search,
   Trash,
   Upload,
@@ -23,9 +22,8 @@ import {
 } from "lucide-react"
 import { StatusBadge, difficultyClass } from "../../components/common"
 import { useApp } from "../../lib/app-context"
+import { isValidQuestion } from "../../lib/cloud-content"
 import {
-  adminPaperQuestions,
-  adminWeekQuestions,
   type AdminQuestion,
   type Course,
   type Status,
@@ -54,17 +52,11 @@ const letter = (index: number) =>
   index >= 0 ? String.fromCharCode(65 + index) : "—"
 const plural = (count: number, word: string) =>
   `${count} ${word}${count === 1 ? "" : "s"}`
-/** Lists whose full question text is part of the preview data; other weeks and papers only carry counts. */
-export const knownLists = new Set([
-  ...Object.keys(adminWeekQuestions),
-  ...Object.keys(adminPaperQuestions),
-])
-
 /* ---------- Question inventory ---------- */
 
 type QuestionDraft = {
   questionText: string
-  options: string[] | null
+  options: string[]
   optionCount: number
   correctAnswerIndex: number
   difficulty: string
@@ -86,7 +78,9 @@ const emptyDraft: QuestionDraft = {
 
 const toDraft = (question: AdminQuestion): QuestionDraft => ({
   questionText: question.questionText,
-  options: question.options ? [...question.options] : null,
+  options:
+    question.options ??
+    Array.from({ length: Math.max(2, question.optionCount) }, () => ""),
   optionCount: question.optionCount,
   correctAnswerIndex: question.correctAnswerIndex,
   difficulty: question.difficulty,
@@ -98,10 +92,8 @@ const toDraft = (question: AdminQuestion): QuestionDraft => ({
 const fromDraft = (draft: QuestionDraft, id: string): AdminQuestion => ({
   id,
   questionText: draft.questionText.trim(),
-  options: draft.options
-    ? draft.options.map((option) => option.trim())
-    : undefined,
-  optionCount: draft.options ? draft.options.length : draft.optionCount,
+  options: draft.options.map((option) => option.trim()),
+  optionCount: draft.options.length,
   correctAnswerIndex: draft.correctAnswerIndex,
   difficulty: draft.difficulty,
   topic: draft.topic.trim() || undefined,
@@ -159,89 +151,59 @@ function QuestionForm({
       </Field>
       <fieldset>
         <legend className="label">Options</legend>
-        {options ? (
-          <div className="space-y-2">
-            {options.map((option, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name={`${id}-correct`}
-                  checked={draft.correctAnswerIndex === index}
-                  onChange={() => set({ correctAnswerIndex: index })}
-                  aria-label={`Mark option ${letter(index)} as correct`}
-                  className="h-4 w-4 shrink-0 accent-green-500"
-                />
-                <input
-                  value={option}
-                  onChange={(event) =>
-                    set({
-                      options: options.map((item, i) =>
-                        i === index ? event.target.value : item,
-                      ),
-                    })
-                  }
-                  placeholder={`Option ${letter(index)}`}
-                  aria-label={`Option ${letter(index)}`}
-                  className="input py-2"
-                />
-                <IconButton
-                  icon={X}
-                  label={`Remove option ${letter(index)}`}
-                  disabled={options.length <= 2}
-                  onClick={() =>
-                    set({
-                      options: options.filter((_, i) => i !== index),
-                      correctAnswerIndex:
-                        draft.correctAnswerIndex === index
-                          ? -1
-                          : draft.correctAnswerIndex > index
-                            ? draft.correctAnswerIndex - 1
-                            : draft.correctAnswerIndex,
-                    })
-                  }
-                />
-              </div>
-            ))}
-            {options.length < 6 && (
-              <button
-                type="button"
-                onClick={() => set({ options: [...options, ""] })}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-primary-600 dark:text-primary-300"
-              >
-                <Plus size={14} />
-                Add option
-              </button>
-            )}
-          </div>
-        ) : (
-          <div>
-            <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-              Option text for existing questions isn't included in this preview.
-              You can still change the correct answer.
-            </p>
-            <div
-              className="flex gap-2"
-              role="group"
-              aria-label="Correct answer"
-            >
-              {Array.from({ length: draft.optionCount }, (_, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  aria-pressed={draft.correctAnswerIndex === index}
-                  onClick={() => set({ correctAnswerIndex: index })}
-                  className={`h-9 w-9 rounded-lg border text-sm font-bold transition-colors ${
-                    draft.correctAnswerIndex === index
-                      ? "border-green-500 bg-green-500 text-white"
-                      : "border-gray-300 text-gray-600 hover:border-green-400 dark:border-white/15 dark:text-gray-300"
-                  }`}
-                >
-                  {letter(index)}
-                </button>
-              ))}
+        <div className="space-y-2">
+          {options.map((option, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <input
+                type="radio"
+                name={`${id}-correct`}
+                checked={draft.correctAnswerIndex === index}
+                onChange={() => set({ correctAnswerIndex: index })}
+                aria-label={`Mark option ${letter(index)} as correct`}
+                className="h-4 w-4 shrink-0 accent-green-500"
+              />
+              <input
+                value={option}
+                onChange={(event) =>
+                  set({
+                    options: options.map((item, i) =>
+                      i === index ? event.target.value : item,
+                    ),
+                  })
+                }
+                placeholder={`Option ${letter(index)}`}
+                aria-label={`Option ${letter(index)}`}
+                className="input py-2"
+              />
+              <IconButton
+                icon={X}
+                label={`Remove option ${letter(index)}`}
+                disabled={options.length <= 2}
+                onClick={() =>
+                  set({
+                    options: options.filter((_, i) => i !== index),
+                    correctAnswerIndex:
+                      draft.correctAnswerIndex === index
+                        ? -1
+                        : draft.correctAnswerIndex > index
+                          ? draft.correctAnswerIndex - 1
+                          : draft.correctAnswerIndex,
+                  })
+                }
+              />
             </div>
-          </div>
-        )}
+          ))}
+          {options.length < 6 && (
+            <button
+              type="button"
+              onClick={() => set({ options: [...options, ""] })}
+              className="inline-flex items-center gap-1 text-sm font-semibold text-primary-600 dark:text-primary-300"
+            >
+              <Plus size={14} />
+              Add option
+            </button>
+          )}
+        </div>
       </fieldset>
       <div className="grid gap-3 sm:grid-cols-3">
         <Field id={`${id}-difficulty`} label="Difficulty">
@@ -313,7 +275,7 @@ function BulkUpload({
   onClose,
 }: {
   existing: AdminQuestion[]
-  onImport: (rows: AdminQuestion[]) => void
+  onImport: (rows: AdminQuestion[]) => Promise<void>
   onClose: () => void
 }) {
   const { toast } = useApp()
@@ -474,8 +436,8 @@ function BulkUpload({
           <div className="flex flex-wrap gap-2">
             <button
               disabled={result.valid.length === 0}
-              onClick={() => {
-                onImport(result.valid)
+              onClick={async () => {
+                await onImport(result.valid)
                 setResult(null)
               }}
               className={smallPrimary}
@@ -496,6 +458,7 @@ export function questionFlags(questions: AdminQuestion[]) {
   return questions.flatMap((question) =>
     [
       !question.questionText.trim() && "Question text is missing.",
+      !question.options?.length && "Option text is missing.",
       question.optionCount < 2 && "Question has empty or insufficient options.",
       (question.correctAnswerIndex < 0 ||
         question.correctAnswerIndex >= question.optionCount) &&
@@ -508,10 +471,11 @@ export function questionFlags(questions: AdminQuestion[]) {
 
 export function QuestionList({
   listId,
+  ownerCourseId,
+  ownerType,
   ownerLabel,
   showFlags,
   embedded,
-  onCountChange,
   audit,
   onConfirm,
   backLabel,
@@ -519,30 +483,45 @@ export function QuestionList({
   /** A link back up to the list these questions belong to. */
 }: {
   listId: string
+  ownerCourseId: string
+  ownerType: "week" | "paper"
   ownerLabel: string
   showFlags: boolean
   embedded?: boolean
-  onCountChange: (delta: number) => void
   audit: Audit
   onConfirm: Confirm
   backLabel?: string
   onBack?: () => void
 }) {
-  const { adminQuestions, setAdminQuestions, toast } = useApp()
+  const {
+    adminQuestions,
+    saveQuestion,
+    saveQuestions,
+    archiveQuestion,
+    newQuestionId,
+    toast,
+  } = useApp()
   const questions = adminQuestions[listId] ?? []
-  const known = knownLists.has(listId)
   const [form, setForm] = useState<{ mode: "add" } | {
     mode: "edit"
     id: string
   } | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const setList = (update: (list: AdminQuestion[]) => AdminQuestion[]) =>
-    setAdminQuestions((current) => ({
-      ...current,
-      [listId]: update(current[listId] ?? []),
-    }))
   const flags = showFlags ? questionFlags(questions) : []
+  const owner = { id: listId, courseId: ownerCourseId, type: ownerType }
+  const persistQuestion = async (question: AdminQuestion) => {
+    try {
+      await saveQuestion(owner, question)
+      return true
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : "Question couldn't be saved.",
+        "error",
+      )
+      return false
+    }
+  }
 
   const body = (
     <>
@@ -582,12 +561,20 @@ export function QuestionList({
           </button>
         </div>
       </div>
-
-      {!known && (
-        <p className="mb-4 rounded-xl border border-dashed border-gray-300 p-3 text-sm text-gray-500 dark:border-white/15 dark:text-gray-400">
-          Question text for {ownerLabel} isn't included in this preview — only
-          its count is shown. Questions you add here stay in this browser
-          session.
+      {questions.length > 0 && (
+        <p className="mb-4 text-xs text-gray-600 dark:text-gray-400">
+          {plural(
+            questions.filter(isValidQuestion).length,
+            "complete question",
+          )}
+          {" · "}
+          {plural(
+            questions.filter(
+              (question) =>
+                question.status === "published" && isValidQuestion(question),
+            ).length,
+            "published question",
+          )}
         </p>
       )}
 
@@ -608,9 +595,21 @@ export function QuestionList({
         <BulkUpload
           existing={questions}
           onClose={() => setBulkOpen(false)}
-          onImport={(rows) => {
-            setList((list) => [...list, ...rows])
-            onCountChange(rows.length)
+          onImport={async (rows) => {
+            try {
+              await saveQuestions(
+                owner,
+                rows.map((row) => ({ ...row, id: newQuestionId() })),
+              )
+            } catch (error) {
+              toast(
+                error instanceof Error
+                  ? error.message
+                  : "Questions couldn't be imported.",
+                "error",
+              )
+              return
+            }
             audit(
               `Imported ${plural(rows.length, "question")} as drafts`,
               ownerLabel,
@@ -626,12 +625,11 @@ export function QuestionList({
           initial={emptyDraft}
           editing={false}
           onCancel={() => setForm(null)}
-          onSubmit={(draft) => {
-            setList((list) => [
-              ...list,
-              fromDraft(draft, `local-${Date.now()}`),
-            ])
-            onCountChange(1)
+          onSubmit={async (draft) => {
+            const saved = await persistQuestion(
+              fromDraft(draft, newQuestionId()),
+            )
+            if (!saved) return
             audit(`Question added as ${draft.status}`, ownerLabel)
             toast("Question added")
             setForm(null)
@@ -640,11 +638,9 @@ export function QuestionList({
       )}
 
       {questions.length === 0 ? (
-        known && (
-          <p className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-            No questions yet.
-          </p>
-        )
+        <p className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+          No question records yet.
+        </p>
       ) : (
         <div className="space-y-2.5">
           {questions.map((question, index) =>
@@ -654,14 +650,11 @@ export function QuestionList({
                 initial={toDraft(question)}
                 editing
                 onCancel={() => setForm(null)}
-                onSubmit={(draft) => {
-                  setList((list) =>
-                    list.map((item) =>
-                      item.id === question.id
-                        ? fromDraft(draft, question.id)
-                        : item,
-                    ),
+                onSubmit={async (draft) => {
+                  const saved = await persistQuestion(
+                    fromDraft(draft, question.id),
                   )
+                  if (!saved) return
                   audit(`Question ${index + 1} edited`, ownerLabel)
                   toast("Question updated")
                   setForm(null)
@@ -702,14 +695,14 @@ export function QuestionList({
                         ? "Hide from students"
                         : "Make visible to students"
                     }
-                    onClick={() => {
+                    onClick={async () => {
                       const status: Status =
                         question.status === "published" ? "draft" : "published"
-                      setList((list) =>
-                        list.map((item) =>
-                          item.id === question.id ? { ...item, status } : item,
-                        ),
-                      )
+                      const saved = await persistQuestion({
+                        ...question,
+                        status,
+                      })
+                      if (!saved) return
                       audit(`Status → ${status}`, ownerLabel)
                       toast(
                         status === "published"
@@ -729,16 +722,13 @@ export function QuestionList({
                     tone="hover:text-red-500"
                     onClick={() =>
                       onConfirm({
-                        title: "Delete this question?",
-                        body: "This question will be permanently removed. This cannot be undone.",
-                        confirmLabel: "Delete question",
-                        onConfirm: () => {
-                          setList((list) =>
-                            list.filter((item) => item.id !== question.id),
-                          )
-                          onCountChange(-1)
+                        title: "Archive this question?",
+                        body: "The question will disappear from learner views. Its record is retained so existing bookmarks and quiz attempts remain valid.",
+                        confirmLabel: "Archive question",
+                        onConfirm: async () => {
+                          await archiveQuestion(owner, question.id)
                           audit(`Deleted question ${index + 1}`, ownerLabel)
-                          toast("Question deleted")
+                          toast("Question archived")
                         },
                       })
                     }
@@ -763,13 +753,18 @@ export function QuestionList({
           </button>
         }
       >
-        {questions.filter((question) => question.status === "published")
-          .length === 0 ? (
+        {questions.filter(
+          (question) =>
+            question.status === "published" && isValidQuestion(question),
+        ).length === 0 ? (
           <p>No questions to preview yet.</p>
         ) : (
           <ol className="space-y-3">
             {questions
-              .filter((question) => question.status === "published")
+              .filter(
+                (question) =>
+                  question.status === "published" && isValidQuestion(question),
+              )
               .map((question, index) => (
                 <li
                   key={question.id}
@@ -778,22 +773,16 @@ export function QuestionList({
                   <p className="font-medium text-gray-800 dark:text-gray-100">
                     {index + 1}. {question.questionText}
                   </p>
-                  {question.options ? (
-                    <ul className="mt-2 space-y-1">
-                      {question.options.map((option, optionIndex) => (
-                        <li
-                          key={optionIndex}
-                          className="rounded-lg bg-gray-100 px-2.5 py-1.5 dark:bg-white/5"
-                        >
-                          {letter(optionIndex)}. {option}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                      Option text isn't included in this preview.
-                    </p>
-                  )}
+                  <ul className="mt-2 space-y-1">
+                    {(question.options ?? []).map((option, optionIndex) => (
+                      <li
+                        key={optionIndex}
+                        className="rounded-lg bg-gray-100 px-2.5 py-1.5 dark:bg-white/5"
+                      >
+                        {letter(optionIndex)}. {option}
+                      </li>
+                    ))}
+                  </ul>
                 </li>
               ))}
           </ol>
@@ -808,36 +797,6 @@ export function QuestionList({
 /* ---------- Weeks ---------- */
 
 const byNumber = (a: Week, b: Week) => a.weekNumber - b.weekNumber
-const statuses: Status[] = ["draft", "published", "archived"]
-
-/** A week read from a backup file; it joins whichever course it is restored into. */
-type BackupWeek = Omit<Week, "courseId">
-
-function parseBackup(value: unknown): BackupWeek[] | null {
-  if (
-    !value ||
-    typeof value !== "object" ||
-    !Array.isArray((value as { weeks?: unknown }).weeks)
-  )
-    return null
-  const weeks: BackupWeek[] = []
-  for (const item of (value as { weeks: unknown[] }).weeks) {
-    if (!item || typeof item !== "object") return null
-    const week = item as Record<string, unknown>
-    if (!Number.isInteger(week.weekNumber) || typeof week.title !== "string")
-      return null
-    weeks.push({
-      id: typeof week.id === "string" ? week.id : `week-${week.weekNumber}`,
-      weekNumber: week.weekNumber as number,
-      title: week.title,
-      questionCount: Number(week.questionCount) || 0,
-      status: statuses.includes(week.status as Status)
-        ? week.status as Status
-        : "draft",
-    })
-  }
-  return weeks
-}
 
 export function WeeksPanel({
   course,
@@ -852,21 +811,25 @@ export function WeeksPanel({
   audit: Audit
   onConfirm: Confirm
 }) {
-  const { weeks: allWeeks, setWeeks, adminQuestions, toast } = useApp()
+  const {
+    weeks: allWeeks,
+    saveWeek,
+    archiveWeek,
+    newContentId,
+    adminQuestions,
+    toast,
+  } = useApp()
   // This course's weeks; updates still go through the shared list, leaving other courses untouched.
   const weeks = allWeeks.filter((week) => week.courseId === course.id)
   const id = useId()
-  const fileRef = useRef<HTMLInputElement>(null)
   const [form, setForm] = useState<{
     id: string | null
     weekNumber: string
     title: string
     status: Status
   } | null>(null)
-  const [restore, setRestore] = useState<BackupWeek[] | null>(null)
-  const [restoreSelection, setRestoreSelection] = useState<number[]>([])
 
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (!form) return
     const number = Number(form.weekNumber)
@@ -877,74 +840,32 @@ export function WeeksPanel({
       return toast("Week number must be a positive whole number", "error")
     if (weeks.some((week) => week.weekNumber === number && week.id !== form.id))
       return toast(`Week ${number} already exists`, "error")
-    if (form.id) {
-      setWeeks((current) =>
-        current
-          .map((week) =>
-            week.id === form.id
-              ? { ...week, weekNumber: number, title, status: form.status }
-              : week,
-          )
-          .sort(byNumber),
+    const updated: Week = {
+      id: form.id ?? newContentId("weeks"),
+      courseId: course.id,
+      weekNumber: number,
+      title,
+      questionCount:
+        weeks.find((week) => week.id === form.id)?.questionCount ?? 0,
+      status: form.status,
+    }
+    try {
+      await saveWeek(updated)
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : "Week couldn't be saved.",
+        "error",
       )
+      return
+    }
+    if (form.id) {
       audit(`Week ${number} edited`, "Weeks")
       toast("Week updated")
     } else {
-      setWeeks((current) =>
-        [
-          ...current,
-          {
-            id: `week-local-${Date.now()}`,
-            courseId: course.id,
-            weekNumber: number,
-            title,
-            questionCount: 0,
-            status: form.status,
-          },
-        ].sort(byNumber),
-      )
       audit(`Week ${number} created as ${form.status}`, "Weeks")
       toast("Week added")
     }
     setForm(null)
-  }
-
-  const readBackup = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    event.target.value = ""
-    if (!file) return
-    try {
-      const parsed = parseBackup(JSON.parse(await file.text()))
-      if (!parsed) throw new Error("unsupported")
-      setRestore(parsed)
-      setRestoreSelection([])
-    } catch {
-      toast("This backup file is invalid or unsupported", "error")
-    }
-  }
-
-  const recount = () => {
-    const fixes = weeks.filter(
-      (week) =>
-        knownLists.has(week.id) &&
-        adminQuestions[week.id] &&
-        adminQuestions[week.id].length !== week.questionCount,
-    )
-    if (fixes.length) {
-      setWeeks((current) =>
-        current.map((week) =>
-          fixes.some((fix) => fix.id === week.id)
-            ? { ...week, questionCount: adminQuestions[week.id].length }
-            : week,
-        ),
-      )
-      audit(`Recounted ${weeks.length} weeks`, "Weeks")
-    }
-    toast(
-      fixes.length
-        ? `Recounted ${weeks.length} weeks — ${fixes.length} corrected`
-        : `All ${weeks.length} week counts already accurate`,
-    )
   }
 
   return (
@@ -983,28 +904,12 @@ export function WeeksPanel({
           >
             Export backup
           </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/json,.json"
-            className="sr-only"
-            onChange={readBackup}
-            aria-label="Choose backup file"
-            tabIndex={-1}
-          />
           <button
-            onClick={() => fileRef.current?.click()}
+            disabled
+            title="Restore is disabled until full Firestore backup validation is available."
             className={smallOutline}
           >
-            Preview restore
-          </button>
-          <button
-            onClick={recount}
-            title="Recompute question counts from the question lists (repairs legacy weeks)"
-            className={smallOutline}
-          >
-            <RefreshCw size={14} />
-            Recount
+            Restore unavailable
           </button>
           <button
             onClick={() =>
@@ -1114,14 +1019,20 @@ export function WeeksPanel({
                         ? "Hide from students"
                         : "Make visible to students"
                     }
-                    onClick={() => {
+                    onClick={async () => {
                       const status: Status =
                         week.status === "published" ? "draft" : "published"
-                      setWeeks((current) =>
-                        current.map((item) =>
-                          item.id === week.id ? { ...item, status } : item,
-                        ),
-                      )
+                      try {
+                        await saveWeek({ ...week, status })
+                      } catch (error) {
+                        toast(
+                          error instanceof Error
+                            ? error.message
+                            : "Week status couldn't be saved.",
+                          "error",
+                        )
+                        return
+                      }
                       audit(
                         `Week ${week.weekNumber}: status → ${status}`,
                         "Weeks",
@@ -1151,16 +1062,14 @@ export function WeeksPanel({
                     tone="hover:text-red-500"
                     onClick={() =>
                       onConfirm({
-                        title: `Delete “${week.title}”?`,
-                        body: `This will permanently delete this week and its ${plural(week.questionCount, "question")}. This cannot be undone.`,
-                        confirmLabel: `Delete week and ${plural(week.questionCount, "question")}`,
-                        onConfirm: () => {
-                          setWeeks((current) =>
-                            current.filter((item) => item.id !== week.id),
-                          )
+                        title: `Archive “${week.title}”?`,
+                        body: `This hides the week from learners. Question records remain stored so bookmarks and quiz attempts are not deleted.`,
+                        confirmLabel: "Archive week",
+                        onConfirm: async () => {
+                          await archiveWeek(week)
                           if (selected) onSelect(null)
-                          audit(`Week ${week.weekNumber} deleted`, "Weeks")
-                          toast("Week deleted")
+                          audit(`Week ${week.weekNumber} archived`, "Weeks")
+                          toast("Week archived")
                         },
                       })
                     }
@@ -1171,100 +1080,6 @@ export function WeeksPanel({
           })}
         </div>
       )}
-
-      <Modal
-        open={Boolean(restore)}
-        title="Restore preview"
-        onClose={() => setRestore(null)}
-        footer={
-          <>
-            <button
-              onClick={() => setRestore(null)}
-              className="btn-ghost px-4 py-2 text-sm"
-            >
-              Close
-            </button>
-            <button
-              disabled={restoreSelection.length === 0}
-              onClick={() => {
-                const chosen = (restore ?? []).filter((week) =>
-                  restoreSelection.includes(week.weekNumber),
-                )
-                onConfirm({
-                  title: "Restore selected content?",
-                  body: `This will add or overwrite ${plural(chosen.length, "selected week")} in ${course.title} for this preview session.`,
-                  confirmLabel: "Restore selected content",
-                  onConfirm: () => {
-                    setWeeks((current) => {
-                      const next = [...current]
-                      chosen.forEach((week, index) => {
-                        // Match by week number within this course. New weeks get fresh ids so a
-                        // backup from another course can't collide with existing ids.
-                        const existing = next.findIndex(
-                          (item) =>
-                            item.courseId === course.id &&
-                            item.weekNumber === week.weekNumber,
-                        )
-                        if (existing >= 0)
-                          next[existing] = {
-                            ...week,
-                            id: next[existing].id,
-                            courseId: course.id,
-                          }
-                        else
-                          next.push({
-                            ...week,
-                            id: `week-restored-${Date.now()}-${index}`,
-                            courseId: course.id,
-                          })
-                      })
-                      return next.sort(byNumber)
-                    })
-                    audit(`Restored ${plural(chosen.length, "week")}`, "Weeks")
-                    toast(`Restored ${plural(chosen.length, "selected week")}`)
-                    setRestore(null)
-                  },
-                })
-              }}
-              className={smallPrimary}
-            >
-              Restore selected
-            </button>
-          </>
-        }
-      >
-        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
-          Weeks are restored into <strong>{course.title}</strong> and matched by
-          week number. Applying a restore is a separate confirmed operation so
-          you can inspect the snapshot first.
-        </p>
-        <fieldset className="space-y-2">
-          <legend className="label">Select weeks to restore</legend>
-          {(restore ?? []).map((week) => (
-            <label
-              key={week.weekNumber}
-              className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 dark:bg-white/5"
-            >
-              <input
-                type="checkbox"
-                checked={restoreSelection.includes(week.weekNumber)}
-                onChange={() =>
-                  setRestoreSelection((current) =>
-                    current.includes(week.weekNumber)
-                      ? current.filter((item) => item !== week.weekNumber)
-                      : [...current, week.weekNumber],
-                  )
-                }
-                className="h-4 w-4 accent-primary-600"
-              />
-              <span>
-                Week {week.weekNumber}: {week.title} ·{" "}
-                {plural(week.questionCount, "question")}
-              </span>
-            </label>
-          ))}
-        </fieldset>
-      </Modal>
     </Panel>
   )
 }
@@ -1289,7 +1104,14 @@ export function PapersPanel({
   audit: Audit
   onConfirm: Confirm
 }) {
-  const { papers: allPapers, setPapers, adminQuestions, toast } = useApp()
+  const {
+    papers: allPapers,
+    savePaper,
+    archivePaper,
+    newContentId,
+    adminQuestions,
+    toast,
+  } = useApp()
   // This course's papers; updates still go through the shared list, leaving other courses untouched.
   const papers = allPapers.filter((paper) => paper.courseId === course.id)
   const id = useId()
@@ -1325,7 +1147,7 @@ export function PapersPanel({
     questionsTop.current?.scrollIntoView({ behavior: "smooth", block: "start" })
   }, [selectedId])
 
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (!form) return
     const title = form.title.trim()
@@ -1347,73 +1169,34 @@ export function PapersPanel({
         "A paper with this title, year, and session already exists",
         "error",
       )
-    const values = {
+    const savedPaper = {
+      id: form.id ?? newContentId("papers"),
+      courseId: course.id,
       title,
       year,
       session,
+      questionCount:
+        papers.find((paper) => paper.id === form.id)?.questionCount ?? 0,
       course: form.course.trim() || undefined,
       status: form.status,
     }
-    if (form.id) {
-      setPapers((current) =>
-        current.map((paper) =>
-          paper.id === form.id ? { ...paper, ...values } : paper,
-        ),
+    try {
+      await savePaper(savedPaper)
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : "Paper couldn't be saved.",
+        "error",
       )
+      return
+    }
+    if (form.id) {
       audit("Paper edited", "PYQ papers")
       toast("PYQ paper updated")
     } else {
-      setPapers((current) => [
-        ...current,
-        {
-          id: `pyq-local-${Date.now()}`,
-          courseId: course.id,
-          questionCount: 0,
-          ...values,
-        },
-      ])
       audit(`Paper created as ${form.status}`, "PYQ papers")
       toast("PYQ paper added")
     }
     setForm(null)
-  }
-
-  const move = (index: number, direction: -1 | 1) => {
-    const first = papers[index]
-    const second = papers[index + direction]
-    // Swap the two papers' slots in the shared list so other courses keep their order.
-    setPapers((current) => {
-      const a = current.findIndex((paper) => paper.id === first.id)
-      const b = current.findIndex((paper) => paper.id === second.id)
-      if (a < 0 || b < 0) return current
-      const next = [...current]
-      ;[next[a], next[b]] = [next[b], next[a]]
-      return next
-    })
-    audit(`Moved ${first.title} ${direction > 0 ? "down" : "up"}`, "PYQ papers")
-    toast("Paper order updated")
-  }
-
-  const recount = () => {
-    const fixes = papers.filter(
-      (paper) =>
-        knownLists.has(paper.id) &&
-        adminQuestions[paper.id] &&
-        adminQuestions[paper.id].length !== paper.questionCount,
-    )
-    if (fixes.length)
-      setPapers((current) =>
-        current.map((paper) =>
-          fixes.some((fix) => fix.id === paper.id)
-            ? { ...paper, questionCount: adminQuestions[paper.id].length }
-            : paper,
-        ),
-      )
-    toast(
-      fixes.length
-        ? `Recounted ${papers.length} papers — ${fixes.length} corrected`
-        : `All ${papers.length} paper counts already accurate`,
-    )
   }
 
   return (
@@ -1427,14 +1210,6 @@ export function PapersPanel({
           invent examination years or official-paper claims.
         </p>
         <div className="flex flex-wrap gap-2">
-          <button
-            onClick={recount}
-            title="Recompute question counts from the question lists (repairs legacy papers)"
-            className={smallOutline}
-          >
-            <RefreshCw size={14} />
-            Recount
-          </button>
           <button
             onClick={() =>
               setForm({
@@ -1600,14 +1375,20 @@ export function PapersPanel({
                         ? "Hide from students"
                         : "Make visible to students"
                     }
-                    onClick={() => {
+                    onClick={async () => {
                       const status: Status =
                         paper.status === "published" ? "draft" : "published"
-                      setPapers((current) =>
-                        current.map((item) =>
-                          item.id === paper.id ? { ...item, status } : item,
-                        ),
-                      )
+                      try {
+                        await savePaper({ ...paper, status })
+                      } catch (error) {
+                        toast(
+                          error instanceof Error
+                            ? error.message
+                            : "Paper status couldn't be saved.",
+                          "error",
+                        )
+                        return
+                      }
                       audit(`Status → ${status}`, "PYQ papers")
                       toast(
                         status === "published"
@@ -1615,18 +1396,6 @@ export function PapersPanel({
                           : "Paper unpublished",
                       )
                     }}
-                  />
-                  <IconButton
-                    icon={ChevronUp}
-                    label={`Move ${paper.title} up`}
-                    disabled={Boolean(term) || index === 0}
-                    onClick={() => move(index, -1)}
-                  />
-                  <IconButton
-                    icon={ChevronDown}
-                    label={`Move ${paper.title} down`}
-                    disabled={Boolean(term) || index === papers.length - 1}
-                    onClick={() => move(index, 1)}
                   />
                   <IconButton
                     icon={PenLine}
@@ -1648,16 +1417,14 @@ export function PapersPanel({
                     tone="hover:text-red-500"
                     onClick={() =>
                       onConfirm({
-                        title: `Delete “${paper.title}”?`,
-                        body: `This will permanently delete this PYQ paper and its ${plural(paper.questionCount, "question")}. This cannot be undone.`,
-                        confirmLabel: `Delete paper and ${plural(paper.questionCount, "question")}`,
-                        onConfirm: () => {
-                          setPapers((current) =>
-                            current.filter((item) => item.id !== paper.id),
-                          )
+                        title: `Archive “${paper.title}”?`,
+                        body: `This hides the paper from learners. Question records remain stored so existing bookmarks and quiz attempts are not deleted.`,
+                        confirmLabel: "Archive paper",
+                        onConfirm: async () => {
+                          await archivePaper(paper)
                           if (isSelected) setSelectedId(null)
-                          audit("Paper deleted", "PYQ papers")
-                          toast("PYQ paper deleted")
+                          audit("Paper archived", "PYQ papers")
+                          toast("PYQ paper archived")
                         },
                       })
                     }
@@ -1678,6 +1445,8 @@ export function PapersPanel({
             key={selected.id}
             listId={selected.id}
             ownerLabel={selected.title}
+            ownerCourseId={course.id}
+            ownerType="paper"
             showFlags={false}
             embedded
             audit={audit}
@@ -1688,18 +1457,6 @@ export function PapersPanel({
                 behavior: "smooth",
                 block: "start",
               })
-            }
-            onCountChange={(delta) =>
-              setPapers((current) =>
-                current.map((paper) =>
-                  paper.id === selected.id
-                    ? {
-                        ...paper,
-                        questionCount: Math.max(0, paper.questionCount + delta),
-                      }
-                    : paper,
-                ),
-              )
             }
           />
         </div>

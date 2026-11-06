@@ -1,29 +1,56 @@
-import { savedByWeek, type Question } from "./data"
+import { type AdminQuestion, type Question } from "./data"
 
-// Where practisable question content comes from. In this preview only the
-// sample questions include full text and options; swap these lookups for
-// fetched course content once a backend is connected.
+export type QuestionBank = Record<string, Question[]>
 
-const byWeek = new Map<string, Question[]>(
-  savedByWeek.map((group) => [group.weekId, group.questions]),
-)
+/** Include only complete, published questions in learner-facing views. */
+export function createQuestionBank(
+  adminQuestions: Record<string, AdminQuestion[]>,
+): QuestionBank {
+  return Object.fromEntries(
+    Object.entries(adminQuestions).map(([weekId, questions]) => [
+      weekId,
+      questions.flatMap((question) => {
+        const options = question.options
+        if (
+          question.status !== "published" ||
+          !question.questionText.trim() ||
+          !options ||
+          options.length < 2 ||
+          options.some((option) => !option.trim()) ||
+          !Number.isInteger(question.correctAnswerIndex) ||
+          question.correctAnswerIndex < 0 ||
+          question.correctAnswerIndex >= options.length
+        )
+          return []
 
-const byId = new Map(
-  savedByWeek.flatMap((group) =>
-    group.questions.map(
-      (question) => [question.id, { question, weekId: group.weekId }] as const,
-    ),
-  ),
-)
-
-/** A week's practisable questions, in their original order. */
-export function weekQuestions(weekId: string): Question[] {
-  return byWeek.get(weekId) ?? []
+        return [
+          {
+            id: question.id,
+            questionText: question.questionText,
+            options: [...options],
+            correctAnswerIndex: question.correctAnswerIndex,
+            difficulty: question.difficulty || undefined,
+            explanation: question.explanation,
+          },
+        ]
+      }),
+    ]),
+  )
 }
 
-export function findQuestion(questionId: string) {
-  return byId.get(questionId)
+/** A week's complete, published questions, in their original order. */
+export function weekQuestions(
+  weekId: string,
+  questionBank: QuestionBank,
+): Question[] {
+  return questionBank[weekId] ?? []
 }
 
-/** Every sample question id; new progress starts with these bookmarked. */
-export const SAMPLE_SAVED_IDS: readonly string[] = [...byId.keys()]
+export function findQuestion(questionId: string, questionBank: QuestionBank) {
+  for (const [weekId, questions] of Object.entries(questionBank)) {
+    const question = questions.find((item) => item.id === questionId)
+    if (question) return { question, weekId }
+  }
+}
+
+export const SAMPLE_SAVED_IDS: readonly string[] = []

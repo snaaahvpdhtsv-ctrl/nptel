@@ -21,7 +21,7 @@ import {
   ReportPrompt,
 } from "../components/ReportProblem"
 import { useCourse, useOptionalCourse } from "../lib/course-context"
-import { savedByWeek } from "../lib/data"
+import { useApp } from "../lib/app-context"
 
 type Icon = ComponentType<LucideProps>
 
@@ -56,12 +56,12 @@ function NoticePage({
 export function WeekStudyPage() {
   const { weekId } = useParams()
   const { path, publishedWeeks } = useCourse()
+  const { questionBank } = useApp()
   const [reporting, setReporting] = useState(false)
   // Only this course's published weeks: hidden or other-course weeks are not found.
   const week = publishedWeeks.find((item) => item.id === weekId)
   if (!week) return <NotFoundPage />
-  const sample =
-    savedByWeek.find((group) => group.weekId === week.id)?.questions ?? []
+  const sample = questionBank[week.id] ?? []
   const report = () => setReporting(true)
 
   return (
@@ -77,8 +77,7 @@ export function WeekStudyPage() {
       {sample.length > 0 ? (
         <>
           <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-            This preview includes {sample.length} of {week.questionCount}{" "}
-            questions for Week {week.weekNumber}.
+            {sample.length} published questions for Week {week.weekNumber}.
           </p>
           <div className="space-y-4">
             {sample.map((question, index) => (
@@ -93,7 +92,7 @@ export function WeekStudyPage() {
         </>
       ) : (
         <NoticeCard
-          title="Question text for this week isn't included in this preview"
+          title="No learner-ready questions are currently published"
           action={
             <Link to={path("/saved")} className="btn-outline px-5 py-2.5">
               Open Saved Questions
@@ -101,8 +100,8 @@ export function WeekStudyPage() {
             </Link>
           }
         >
-          Week {week.weekNumber} lists {week.questionCount} questions. Saved
-          Questions shows the sample questions that are available.
+          This week will appear in the answer key once valid questions are
+          published.
         </NoticeCard>
       )}
       <ReportPrompt onReport={report} />
@@ -127,17 +126,32 @@ export function PracticeWeekRedirect() {
 export function PyqPaperPage() {
   const { paperId } = useParams()
   const { path, publishedPapers } = useCourse()
+  const { questionBank } = useApp()
   const paper = publishedPapers.find((item) => item.id === paperId)
   if (!paper) return <NotFoundPage />
+  const questions = questionBank[paper.id] ?? []
 
   return (
-    <NoticePage
-      icon={FileText}
-      title={paper.title}
-      subtitle={`${[paper.year, paper.session].filter(Boolean).join(" · ")} · ${paper.questionCount} questions`}
-      back={{ to: path("/pyq/answers"), label: "PYQ Answers" }}
-      notice="Question text for this paper isn't included in this preview"
-    />
+    <div className="learner-page mx-auto max-w-4xl px-4 py-8">
+      <BackLink to={path("/pyq/answers")} label="PYQ Answers" />
+      <PageHeader
+        icon={FileText}
+        title={paper.title}
+        subtitle={`${[paper.year, paper.session].filter(Boolean).join(" · ")} · ${questions.length} question${
+          questions.length === 1 ? "" : "s"
+        }`}
+      />
+      <div className="space-y-4">
+        {questions.map((question, index) => (
+          <QuestionCard
+            key={question.id}
+            question={question}
+            index={index}
+            showAnswer
+          />
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -155,11 +169,11 @@ export function PyqPracticeRunPage() {
         chosen.length
           ? `${chosen.length} paper${
               chosen.length === 1 ? "" : "s"
-            } · ${chosen.reduce((sum, paper) => sum + paper.questionCount, 0)} questions`
+            } · ${chosen.reduce((sum, paper) => sum + paper.questionCount, 0)} verified questions`
           : "No papers selected"
       }
       back={{ to: path("/pyq/practice"), label: "Practice PYQs" }}
-      notice="Question text for these papers isn't included in this preview"
+      notice="Interactive PYQ practice is not available yet. Published questions and answers are available in the PYQ answer key."
       action={
         <Link to={path("/pyq/practice")} className="btn-primary px-5 py-2.5">
           Back to paper selection

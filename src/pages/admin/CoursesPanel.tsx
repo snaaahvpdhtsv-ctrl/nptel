@@ -57,16 +57,7 @@ export function CoursesPanel({
   audit: Audit
   onConfirm: (state: ConfirmState) => void
 }) {
-  const {
-    courses,
-    setCourses,
-    weeks,
-    setWeeks,
-    papers,
-    setPapers,
-    setAdminQuestions,
-    toast,
-  } = useApp()
+  const { courses, saveCourse, archiveCourse, weeks, papers, toast } = useApp()
   const id = useId()
   const [form, setForm] = useState<CourseForm | null>(null)
   const courseIds = courses.map((course) => course.id)
@@ -78,7 +69,7 @@ export function CoursesPanel({
   const papersOf = (courseId: string) =>
     papers.filter((paper) => paper.courseId === courseId)
 
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (!form) return
     const title = form.title.trim()
@@ -98,16 +89,28 @@ export function CoursesPanel({
       sample: form.sample,
     }
     if (form.id) {
-      setCourses((current) =>
-        current.map((course) =>
-          course.id === form.id ? { ...course, ...values } : course,
-        ),
-      )
+      try {
+        await saveCourse({ id: form.id, ...values })
+      } catch (error) {
+        toast(
+          error instanceof Error ? error.message : "Course couldn't be saved.",
+          "error",
+        )
+        return
+      }
       audit(`Course “${title}” edited`, "Courses")
       toast("Course updated")
     } else {
       const courseId = uniqueSlug(title, courseIds)
-      setCourses((current) => [...current, { id: courseId, ...values }])
+      try {
+        await saveCourse({ id: courseId, ...values })
+      } catch (error) {
+        toast(
+          error instanceof Error ? error.message : "Course couldn't be saved.",
+          "error",
+        )
+        return
+      }
       // Switch to the new course so weeks and papers can be added right away.
       onSelect(courseId)
       audit(`Course “${title}” created as ${form.status}`, "Courses")
@@ -120,13 +123,19 @@ export function CoursesPanel({
     setForm(null)
   }
 
-  const toggleVisibility = (course: Course) => {
+  const toggleVisibility = async (course: Course) => {
     const status: Status = course.status === "published" ? "draft" : "published"
-    setCourses((current) =>
-      current.map((item) =>
-        item.id === course.id ? { ...item, status } : item,
-      ),
-    )
+    try {
+      await saveCourse({ ...course, status })
+    } catch (error) {
+      toast(
+        error instanceof Error
+          ? error.message
+          : "Course status couldn't be saved.",
+        "error",
+      )
+      return
+    }
     audit(`Course “${course.title}”: status → ${status}`, "Courses")
     toast(
       status === "published"
@@ -139,32 +148,28 @@ export function CoursesPanel({
     const courseWeeks = weeksOf(course.id)
     const coursePapers = papersOf(course.id)
     onConfirm({
-      title: `Delete “${course.title}”?`,
-      body: `This permanently deletes the course, its ${plural(courseWeeks.length, "week")}, ${plural(coursePapers.length, "PYQ paper")} and their questions. Requests sent from this course are kept and shown as “No course”. This cannot be undone.`,
-      confirmLabel: "Delete course",
-      onConfirm: () => {
-        const listIds = new Set(
-          [...courseWeeks, ...coursePapers].map((item) => item.id),
-        )
-        setCourses((current) => current.filter((item) => item.id !== course.id))
-        setWeeks((current) =>
-          current.filter((week) => week.courseId !== course.id),
-        )
-        setPapers((current) =>
-          current.filter((paper) => paper.courseId !== course.id),
-        )
-        setAdminQuestions((current) =>
-          Object.fromEntries(
-            Object.entries(current).filter(([listId]) => !listIds.has(listId)),
-          ),
-        )
+      title: `Archive “${course.title}”?`,
+      body: `This hides the course and its ${plural(courseWeeks.length, "week")}, ${plural(coursePapers.length, "PYQ paper")} and questions from learners. Records are retained so existing bookmarks and quiz attempts remain intact.`,
+      confirmLabel: "Archive course",
+      onConfirm: async () => {
+        try {
+          await archiveCourse(course)
+        } catch (error) {
+          toast(
+            error instanceof Error
+              ? error.message
+              : "Course couldn't be archived.",
+            "error",
+          )
+          throw error
+        }
         if (localStorage.getItem(LAST_COURSE_KEY) === course.id)
           localStorage.removeItem(LAST_COURSE_KEY)
         if (course.id === selectedId)
           onSelect(courses.find((item) => item.id !== course.id)?.id ?? null)
         if (form?.id === course.id) setForm(null)
-        audit(`Course “${course.title}” deleted`, "Courses")
-        toast("Course deleted")
+        audit(`Course “${course.title}” archived`, "Courses")
+        toast("Course archived")
       },
     })
   }
@@ -329,7 +334,7 @@ export function CoursesPanel({
                   />
                   <IconButton
                     icon={Trash}
-                    label={`Delete ${course.title}`}
+                    label={`Archive ${course.title}`}
                     tone="hover:text-red-500"
                     onClick={() => remove(course)}
                   />

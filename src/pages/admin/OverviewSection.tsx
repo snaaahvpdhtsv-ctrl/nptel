@@ -14,7 +14,7 @@ import { useApp } from "../../lib/app-context"
 import type { Course, Paper, RequestItem, Week } from "../../lib/data"
 import { reportHeadline } from "../../lib/reports"
 import type { SectionId } from "./AdminNav"
-import { knownLists, questionFlags } from "./ContentPanels"
+import { questionFlags } from "./ContentPanels"
 import {
   downloadFile,
   Panel,
@@ -234,12 +234,10 @@ export function OverviewSection({
           issues.push(`Week ${week.weekNumber} is published with no questions.`)
         if (!week.title.trim())
           issues.push(`Week ${week.weekNumber} has no title.`)
-        if (
-          list &&
-          knownLists.has(week.id) &&
-          list.length !== week.questionCount
-        )
-          issues.push(`Week ${week.weekNumber}: question count is out of date.`)
+        if (list && list.length > week.questionCount)
+          issues.push(
+            `Week ${week.weekNumber}: listed total is below the number of editable question records.`,
+          )
         if (list?.some((question) => !question.questionText.trim()))
           issues.push(`Week ${week.weekNumber}: a question has no text.`)
       }
@@ -420,7 +418,7 @@ export function OverviewSection({
       <Panel>
         <PanelTitle
           title="Learner activity"
-          subtitle="Quiz progress is saved on each learner's device in this preview, so these figures fill in once progress syncs to a server."
+          subtitle="Learners' attempts sync to their private accounts. Admin activity reporting is not connected yet."
         />
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[

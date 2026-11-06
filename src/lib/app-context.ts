@@ -12,6 +12,7 @@ import type {
   RequestItem,
   Week,
 } from "./data"
+import type { QuestionBank } from "./question-bank"
 
 export type A11yKey = "largeText" | "highContrast" | "reducedMotion" | "dyslexiaSpacing"
 
@@ -26,16 +27,47 @@ export interface AppState {
   toggleTheme: () => void
   a11y: Record<A11yKey, boolean>
   toggleA11y: (key: A11yKey) => void
-  /** Every course, including hidden ones; learner pages only show published courses. */
+  contentLoading: boolean
+  contentError: string | null
+  /** Firestore courses; learner pages only show published courses. */
   courses: Course[]
-  setCourses: Dispatch<SetStateAction<Course[]>>
+  saveCourse: (course: Course) => Promise<void>
+  archiveCourse: (course: Course) => Promise<void>
   weeks: Week[]
-  setWeeks: Dispatch<SetStateAction<Week[]>>
+  saveWeek: (week: Week) => Promise<void>
+  archiveWeek: (week: Week) => Promise<void>
   papers: Paper[]
-  setPapers: Dispatch<SetStateAction<Paper[]>>
-  /** Admin question inventory keyed by week or paper id. Only lists included in the preview data are present. */
+  savePaper: (paper: Paper) => Promise<void>
+  archivePaper: (paper: Paper) => Promise<void>
+  /** Firestore question records keyed by their parent week or paper ID. */
   adminQuestions: Record<string, AdminQuestion[]>
-  setAdminQuestions: Dispatch<SetStateAction<Record<string, AdminQuestion[]>>>
+  saveQuestion: (
+    owner: {
+      id: string
+      courseId: string
+      type: "week" | "paper"
+    },
+    question: AdminQuestion,
+  ) => Promise<void>
+  saveQuestions: (
+    owner: {
+      id: string
+      courseId: string
+      type: "week" | "paper"
+    },
+    questions: AdminQuestion[],
+  ) => Promise<void>
+  archiveQuestion: (
+    owner: {
+      id: string
+      type: "week" | "paper"
+    },
+    questionId: string,
+  ) => Promise<void>
+  newQuestionId: () => string
+  newContentId: (collection: "weeks" | "papers") => string
+  /** Complete published questions, derived from the Firestore inventory. */
+  questionBank: QuestionBank
   requests: RequestItem[]
   setRequests: Dispatch<SetStateAction<RequestItem[]>>
   /** The admin's site-wide announcement, shown to learners as a popup; null when there is none. */

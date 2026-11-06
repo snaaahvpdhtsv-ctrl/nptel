@@ -36,7 +36,28 @@ function parseAnswer(value: unknown): AttemptAnswer | null {
     chosenIndex < 0
   )
     return null
-  return { questionId, weekId, chosenIndex, correct }
+  const questionText =
+    typeof value.questionText === "string" ? value.questionText : undefined
+  const options = Array.isArray(value.options)
+    ? value.options.filter(
+        (option): option is string => typeof option === "string",
+      )
+    : undefined
+  const correctAnswerIndex =
+    typeof value.correctAnswerIndex === "number" &&
+    Number.isInteger(value.correctAnswerIndex) &&
+    value.correctAnswerIndex >= 0
+      ? value.correctAnswerIndex
+      : undefined
+  return {
+    questionId,
+    weekId,
+    chosenIndex,
+    correct,
+    ...(questionText === undefined ? {} : { questionText }),
+    ...(options === undefined ? {} : { options }),
+    ...(correctAnswerIndex === undefined ? {} : { correctAnswerIndex }),
+  }
 }
 
 function parseAttempt(value: unknown): QuizAttempt | null {
@@ -75,6 +96,26 @@ function parseAttempt(value: unknown): QuizAttempt | null {
   }
 }
 
+export function parseProgressData(value: unknown): ProgressData | null {
+  if (!isRecord(value) || value.version !== 1) return null
+  const seen = new Set<string>()
+  const attempts: QuizAttempt[] = []
+  for (const item of Array.isArray(value.attempts) ? value.attempts : []) {
+    const attempt = parseAttempt(item)
+    if (!attempt || seen.has(attempt.id)) continue
+    seen.add(attempt.id)
+    attempts.push(attempt)
+  }
+  const savedIds = Array.isArray(value.savedIds)
+    ? value.savedIds.filter((id): id is string => typeof id === "string")
+    : []
+  return {
+    version: 1,
+    attempts: sortAttempts(attempts).slice(0, MAX_ATTEMPTS),
+    savedIds: [...new Set(savedIds)],
+  }
+}
+
 /** Saved progress for an owner, or null when there is none or it can't be read. */
 export function readProgress(ownerId: string): ProgressData | null {
   let raw: string | null
@@ -85,24 +126,7 @@ export function readProgress(ownerId: string): ProgressData | null {
   }
   if (raw === null) return null
   try {
-    const value: unknown = JSON.parse(raw)
-    if (!isRecord(value) || value.version !== 1) return null
-    const seen = new Set<string>()
-    const attempts: QuizAttempt[] = []
-    for (const item of Array.isArray(value.attempts) ? value.attempts : []) {
-      const attempt = parseAttempt(item)
-      if (!attempt || seen.has(attempt.id)) continue
-      seen.add(attempt.id)
-      attempts.push(attempt)
-    }
-    const savedIds = Array.isArray(value.savedIds)
-      ? value.savedIds.filter((id): id is string => typeof id === "string")
-      : []
-    return {
-      version: 1,
-      attempts: sortAttempts(attempts).slice(0, MAX_ATTEMPTS),
-      savedIds: [...new Set(savedIds)],
-    }
+    return parseProgressData(JSON.parse(raw))
   } catch {
     return null
   }

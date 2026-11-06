@@ -543,7 +543,7 @@ function QuizRunner({
   shuffleOptions,
 }: QuizRunnerProps) {
   const { course, path } = useCourse()
-  const { toast } = useApp()
+  const { toast, questionBank } = useApp()
   const { savedIds, toggleSaved, recordAttempt, isGuest } = useProgress()
   const [items, setItems] = useState(() =>
     buildItems(questions, shuffleQuestions, shuffleOptions),
@@ -634,9 +634,13 @@ function QuizRunner({
           return [
             {
               questionId: entry.question.id,
-              weekId: findQuestion(entry.question.id)?.weekId ?? "",
+              weekId:
+                findQuestion(entry.question.id, questionBank)?.weekId ?? "",
               chosenIndex,
               correct: chosenIndex === entry.question.correctAnswerIndex,
+              questionText: entry.question.questionText,
+              options: [...entry.question.options],
+              correctAnswerIndex: entry.question.correctAnswerIndex,
             },
           ]
         }),
@@ -921,6 +925,7 @@ function QuizRunner({
 export default function PracticeQuizPage() {
   const [params] = useSearchParams()
   const { path, publishedWeeks } = useCourse()
+  const { questionBank } = useApp()
   const mistakesMode = params.get("mode") === "mistakes"
   const ids = (params.get(mistakesMode ? "questions" : "weeks") || "")
     .split(",")
@@ -932,7 +937,7 @@ export default function PracticeQuizPage() {
     // Specific questions (from Review Mistakes), limited to this course's published weeks.
     const published = new Set(publishedWeeks.map((week) => week.id))
     const found = [...new Set(ids)]
-      .map((id) => findQuestion(id))
+      .map((id) => findQuestion(id, questionBank))
       .filter(
         (entry): entry is NonNullable<typeof entry> =>
           entry !== undefined && published.has(entry.weekId),
@@ -944,7 +949,7 @@ export default function PracticeQuizPage() {
   } else {
     chosen = publishedWeeks.filter((week) => ids.includes(week.id))
     // Only questions whose full text and options are part of the preview data can be practised.
-    questions = chosen.flatMap((week) => weekQuestions(week.id))
+    questions = chosen.flatMap((week) => weekQuestions(week.id, questionBank))
   }
 
   const backTo: BackLinkProps = mistakesMode
@@ -977,7 +982,7 @@ export default function PracticeQuizPage() {
 
   if (questions.length === 0) {
     const playable = publishedWeeks.filter(
-      (week) => weekQuestions(week.id).length > 0,
+      (week) => weekQuestions(week.id, questionBank).length > 0,
     )
     return (
       <div className="learner-page mx-auto max-w-4xl px-4 py-8">

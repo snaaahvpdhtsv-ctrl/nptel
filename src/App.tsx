@@ -169,8 +169,8 @@ function Aurora() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppProvider>
-        <AuthProvider>
+      <AuthProvider>
+        <AppProvider>
           <ProgressProvider>
             <MobileSurface />
             <ScrollToTop />
@@ -241,8 +241,8 @@ export default function App() {
               </main>
             </div>
           </ProgressProvider>
-        </AuthProvider>
-      </AppProvider>
+        </AppProvider>
+      </AuthProvider>
     </BrowserRouter>
   )
 }

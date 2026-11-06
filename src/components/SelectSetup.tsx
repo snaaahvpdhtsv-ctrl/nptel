@@ -17,6 +17,7 @@ export function SelectableCard({
   eyebrow,
   title,
   questionCount,
+  questionCountLabel = "questions",
   meta,
 }: {
   gradient: string
@@ -26,6 +27,7 @@ export function SelectableCard({
   eyebrow: ReactNode
   title: string
   questionCount: number
+  questionCountLabel?: string
   meta?: string
 }) {
   return (
@@ -71,7 +73,7 @@ export function SelectableCard({
         <p className="text-sm opacity-75 mt-2">
           <span className="inline-flex items-center gap-1.5">
             <LayoutGrid size={13} />
-            {questionCount} questions
+            {questionCount} {questionCountLabel}
           </span>
         </p>
         <span
@@ -86,7 +88,7 @@ export function SelectableCard({
         <span className="mobile-row-title">{title}</span>
         <span className="mobile-row-meta">
           {meta ? `${meta} · ` : ""}
-          {questionCount} questions
+          {questionCount} {questionCountLabel}
         </span>
       </span>
     </motion.button>

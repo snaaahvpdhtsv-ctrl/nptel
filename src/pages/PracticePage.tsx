@@ -8,14 +8,18 @@ import {
   StartBar,
 } from "../components/SelectSetup"
 import { useCourse } from "../lib/course-context"
+import { useApp } from "../lib/app-context"
 import { useCourseProgress } from "../lib/course-progress"
 import { weekGradients } from "../lib/data"
 
 export default function PracticePage() {
   const navigate = useNavigate()
   const { path, publishedWeeks } = useCourse()
+  const { questionBank } = useApp()
   const { mistakes } = useCourseProgress()
-  const available = publishedWeeks.filter((week) => week.questionCount > 0)
+  const available = publishedWeeks.filter(
+    (week) => (questionBank[week.id]?.length ?? 0) > 0,
+  )
   const [selected, setSelected] = useState<string[]>([])
   const [shuffleQuestions, setShuffleQuestions] = useState(true)
   const [shuffleOptions, setShuffleOptions] = useState(false)
@@ -27,7 +31,7 @@ export default function PracticePage() {
     )
   const total = available
     .filter((week) => selected.includes(week.id))
-    .reduce((sum, week) => sum + week.questionCount, 0)
+    .reduce((sum, week) => sum + (questionBank[week.id]?.length ?? 0), 0)
 
   return (
     <div className="learner-page practice-page max-w-6xl mx-auto px-4 py-8">
@@ -108,7 +112,8 @@ export default function PracticePage() {
                 }
                 title={week.title}
                 meta={`Week ${week.weekNumber}`}
-                questionCount={week.questionCount}
+                questionCount={questionBank[week.id]?.length ?? 0}
+                questionCountLabel="published questions"
               />
             ))}
           </div>

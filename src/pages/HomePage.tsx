@@ -52,7 +52,7 @@ const features = [
   },
   {
     title: "PYQs",
-    desc: "Study previous-year questions and practise for exams",
+    desc: "Browse previous-year paper listings",
     icon: FileText,
     to: "/pyq",
     gradient: "from-emerald-500 to-cyan-600",

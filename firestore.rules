@@ -15,19 +15,84 @@ service cloud.firestore {
 
     function publishedCourse(courseId) {
       return exists(/databases/$(database)/documents/courses/$(courseId))
-        && get(/databases/$(database)/documents/courses/$(courseId)).data.status == "published";
+        && get(/databases/$(database)/documents/courses/$(courseId)).data.status == "published"
+        && get(/databases/$(database)/documents/courses/$(courseId)).data.contentReady == true;
     }
 
     function publishedWeek(weekId) {
       return exists(/databases/$(database)/documents/weeks/$(weekId))
         && get(/databases/$(database)/documents/weeks/$(weekId)).data.status == "published"
+        && get(/databases/$(database)/documents/weeks/$(weekId)).data.contentReady == true
         && publishedCourse(get(/databases/$(database)/documents/weeks/$(weekId)).data.courseId);
     }
 
     function publishedPaper(paperId) {
       return exists(/databases/$(database)/documents/papers/$(paperId))
         && get(/databases/$(database)/documents/papers/$(paperId)).data.status == "published"
+        && get(/databases/$(database)/documents/papers/$(paperId)).data.contentReady == true
         && publishedCourse(get(/databases/$(database)/documents/papers/$(paperId)).data.courseId);
+    }
+
+    function validStatus() {
+      return request.resource.data.status in ["draft", "published", "archived"]
+        && request.resource.data.contentReady is bool
+        && request.resource.data.contentReady
+          == (request.resource.data.status == "published");
+    }
+
+    function validOption(options, index) {
+      return options.size() <= index
+        || (options[index] is string
+          && options[index].size() > 0
+          && options[index].size() <= 1000);
+    }
+
+    function validPublishedQuestion() {
+      let options = request.resource.data.options;
+      return request.resource.data.contentReady == true
+        && request.resource.data.questionText is string
+        && request.resource.data.questionText.size() > 0
+        && request.resource.data.questionText.size() <= 5000
+        && options is list
+        && options.size() >= 2
+        && options.size() <= 6
+        && validOption(options, 0)
+        && validOption(options, 1)
+        && validOption(options, 2)
+        && validOption(options, 3)
+        && validOption(options, 4)
+        && validOption(options, 5)
+        && request.resource.data.correctAnswerIndex is int
+        && request.resource.data.correctAnswerIndex >= 0
+        && request.resource.data.correctAnswerIndex < options.size();
+    }
+
+    function validQuestion() {
+      return validStatus()
+        && request.resource.data.courseId is string
+        && request.resource.data.courseId.size() > 0
+        && (
+          (request.resource.data.weekId is string
+            && request.resource.data.weekId.size() > 0
+            && request.resource.data.paperId == null
+            && exists(/databases/$(database)/documents/weeks/$(request.resource.data.weekId))
+            && get(/databases/$(database)/documents/weeks/$(request.resource.data.weekId)).data.courseId
+              == request.resource.data.courseId)
+          || (request.resource.data.paperId is string
+            && request.resource.data.paperId.size() > 0
+            && request.resource.data.weekId == null
+            && exists(/databases/$(database)/documents/papers/$(request.resource.data.paperId))
+            && get(/databases/$(database)/documents/papers/$(request.resource.data.paperId)).data.courseId
+              == request.resource.data.courseId)
+        )
+        && (request.resource.data.status != "published"
+          || validPublishedQuestion())
+        && (!("difficulty" in request.resource.data)
+          || (request.resource.data.difficulty is string
+            && request.resource.data.difficulty.size() <= 20))
+        && (!("explanation" in request.resource.data)
+          || (request.resource.data.explanation is string
+            && request.resource.data.explanation.size() <= 5000));
     }
 
     function validFeedback() {
@@ -114,28 +179,54 @@ service cloud.firestore {
     }
 
     match /courses/{courseId} {
-      allow read: if isAdmin() || resource.data.status == "published";
-      allow write: if isAdmin();
+      allow read: if isAdmin()
+        || (resource.data.status == "published" && resource.data.contentReady == true);
+      allow write: if isAdmin()
+        && validStatus()
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 160
+        && request.resource.data.sample is bool;
     }
 
     match /weeks/{weekId} {
       allow read: if isAdmin()
-        || (resource.data.status == "published" && publishedCourse(resource.data.courseId));
-      allow write: if isAdmin();
+        || (resource.data.status == "published"
+          && resource.data.contentReady == true
+          && publishedCourse(resource.data.courseId));
+      allow write: if isAdmin()
+        && validStatus()
+        && request.resource.data.courseId is string
+        && request.resource.data.weekNumber is int
+        && request.resource.data.weekNumber > 0
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200;
     }
 
     match /papers/{paperId} {
       allow read: if isAdmin()
-        || (resource.data.status == "published" && publishedCourse(resource.data.courseId));
-      allow write: if isAdmin();
+        || (resource.data.status == "published"
+          && resource.data.contentReady == true
+          && publishedCourse(resource.data.courseId));
+      allow write: if isAdmin()
+        && validStatus()
+        && request.resource.data.courseId is string
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200
+        && request.resource.data.year is int
+        && request.resource.data.year >= 1950
+        && request.resource.data.year <= 2100;
     }
 
     match /questions/{questionId} {
       allow read: if isAdmin()
         || (resource.data.status == "published"
+          && resource.data.contentReady == true
           && (("weekId" in resource.data && publishedWeek(resource.data.weekId))
             || ("paperId" in resource.data && publishedPaper(resource.data.paperId))));
-      allow write: if isAdmin();
+      allow write: if isAdmin() && validQuestion();
     }
 
     match /announcements/{announcementId} {

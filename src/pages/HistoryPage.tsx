@@ -60,7 +60,19 @@ function AnswerRow({
   answer: AttemptAnswer
   position: number
 }) {
-  const question = findQuestion(answer.questionId)?.question
+  const { questionBank } = useApp()
+  const liveQuestion = findQuestion(answer.questionId, questionBank)?.question
+  const question =
+    answer.questionText &&
+    answer.options &&
+    Number.isInteger(answer.correctAnswerIndex)
+      ? {
+          id: answer.questionId,
+          questionText: answer.questionText,
+          options: answer.options,
+          correctAnswerIndex: answer.correctAnswerIndex ?? -1,
+        }
+      : liveQuestion
   const Icon = answer.correct ? CircleCheck : CircleX
   return (
     <li className="history-answer flex gap-3 rounded-xl bg-gray-50 px-3 py-2.5 text-sm dark:bg-white/[0.035]">
@@ -77,6 +89,11 @@ function AnswerRow({
         </span>
         {question ? (
           <>
+            {!liveQuestion && (
+              <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">
+                Question content archived; showing the saved attempt version.
+              </p>
+            )}
             <p className="line-clamp-2 text-gray-800 dark:text-gray-100">
               <span className="font-semibold">Q{position + 1}.</span>{" "}
               {question.questionText}

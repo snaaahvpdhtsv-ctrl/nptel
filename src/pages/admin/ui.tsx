@@ -1,4 +1,4 @@
-import { useEffect, type ComponentType, type ReactNode } from "react"
+import { useEffect, useState, type ComponentType, type ReactNode } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { GraduationCap, X, type LucideProps } from "lucide-react"
 import type { Status } from "../../lib/data"
@@ -8,12 +8,16 @@ export type IconType = ComponentType<LucideProps>
 export function Panel({
   children,
   className = "",
+  role,
 }: {
   children: ReactNode
   className?: string
+  role?: "status" | "alert"
 }) {
   return (
-    <section className={`card p-5 sm:p-6 ${className}`}>{children}</section>
+    <section role={role} className={`card p-5 sm:p-6 ${className}`}>
+      {children}
+    </section>
   )
 }
 
@@ -241,7 +245,7 @@ export type ConfirmState = {
   title: string
   body: string
   confirmLabel: string
-  onConfirm: () => void
+  onConfirm: () => void | Promise<void>
 } | null
 
 export function ConfirmDialog({
@@ -251,6 +255,27 @@ export function ConfirmDialog({
   state: ConfirmState
   onClose: () => void
 }) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+
+  const confirm = async () => {
+    if (!state) return
+    setSaving(true)
+    setError("")
+    try {
+      await state.onConfirm()
+      onClose()
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "The change couldn't be saved.",
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <Modal
       open={Boolean(state)}
@@ -258,22 +283,29 @@ export function ConfirmDialog({
       onClose={onClose}
       footer={
         <>
-          <button onClick={onClose} className="btn-ghost px-4 py-2 text-sm">
+          <button
+            disabled={saving}
+            onClick={onClose}
+            className="btn-ghost px-4 py-2 text-sm"
+          >
             Cancel
           </button>
           <button
-            onClick={() => {
-              state?.onConfirm()
-              onClose()
-            }}
+            disabled={saving}
+            onClick={() => void confirm()}
             className="btn rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500"
           >
-            {state?.confirmLabel}
+            {saving ? "Saving…" : state?.confirmLabel}
           </button>
         </>
       }
     >
       <p>{state?.body}</p>
+      {error && (
+        <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
     </Modal>
   )
 }

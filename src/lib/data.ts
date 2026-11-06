@@ -6,6 +6,7 @@ export interface Course {
   description?: string
   /** Learners only see published courses. */
   status: Status
+  contentReady?: boolean
   /** Placeholder course without real content yet. */
   sample: boolean
 }
@@ -17,6 +18,7 @@ export type Week = {
   title: string
   questionCount: number
   status: Status
+  contentReady?: boolean
 }
 
 export type Question = {
@@ -35,7 +37,7 @@ export type AdminQuestion = {
   correctAnswerIndex: number
   difficulty: string
   status: Status
-  /** Option text is only known for questions created in this session. */
+  /** May be absent on legacy Firestore records that require content repair. */
   options?: string[]
   topic?: string
   explanation?: string
@@ -49,6 +51,7 @@ export type Paper = {
   session: string
   questionCount: number
   status: Status
+  contentReady?: boolean
   course?: string
 }
 
@@ -104,7 +107,7 @@ export const initialCourses: Course[] = [
     (number): Course => ({
       id: `sample-course-${number}`,
       title: `Sample Course ${number}`,
-      status: "published",
+      status: "draft",
       sample: true,
     }),
   ),
@@ -370,62 +373,27 @@ export const savedByWeek: SavedGroup[] = [
   },
 ]
 
-const adminRows = (
-  prefix: string,
-  rows: [string, string, string?][],
-): AdminQuestion[] =>
-  rows.map(([questionText, correct, difficulty = "Easy"], index) => ({
-    id: `${prefix}-${index + 1}`,
-    questionText,
-    optionCount: 4,
-    correctAnswerIndex: correct.charCodeAt(0) - 65,
-    difficulty,
-    status: "published",
-  }))
+export const adminWeekQuestions: Record<string, AdminQuestion[]> =
+  Object.fromEntries(
+    savedByWeek.map(({ weekId, questions }) => [
+      weekId,
+      questions.map(
+        (question): AdminQuestion => ({
+          id: question.id,
+          questionText: question.questionText,
+          options: [...question.options],
+          optionCount: question.options.length,
+          correctAnswerIndex: question.correctAnswerIndex,
+          difficulty: question.difficulty ?? "",
+          explanation: question.explanation,
+          status: "published",
+        }),
+      ),
+    ]),
+  )
 
-export const adminWeekQuestions: Record<string, AdminQuestion[]> = {
-  "week-6": adminRows("w6", [
-    ["Journaling helps in:", "C"],
-    ["Gratitude journaling improves:", "D"],
-    ["Movement therapies include:", "A"],
-    ["Storytelling helps in:", "C"],
-    ["Which is a mindfulness technique?", "D"],
-    ["Exam anxiety can affect:", "C"],
-    ["A study schedule helps in:", "C"],
-    ["Positive self-talk helps to:", "A"],
-    ["How do creative arts and therapies support emotional well-being?", "A"],
-    ["What strategies help in managing exam anxiety effectively?", "A"],
-  ]),
-}
-
-export const adminPaperQuestions: Record<string, AdminQuestion[]> = {
-  "pyq-1": adminRows("p1", [
-    ["What is mental well-being?", "B"],
-    [
-      "Which of the following is a common emotional change during adolescence?",
-      "C",
-    ],
-    ["Why is identity formation significant during adolescence?", "C"],
-    ["Which of the following is an example of emotional intelligence?", "B"],
-    ["Why are support networks important in times of crisis?", "C"],
-    ["What role do mentors and guidance play in adolescent well-being?", "B"],
-    ["Which of the following is a practical stress management technique?", "C"],
-    [
-      "According to Erikson, what is the central conflict during adolescence?",
-      "C",
-    ],
-    [
-      "According to Kristin Neff, which of the following is not one of the three core components of self-compassion?",
-      "A",
-      "Medium",
-    ],
-    [
-      "What are the two main types of social comparison identified in Festinger's Social Comparison Theory?",
-      "C",
-      "Medium",
-    ],
-  ]),
-}
+// PYQ metadata is present, but no verified question content is included in this preview.
+export const adminPaperQuestions: Record<string, AdminQuestion[]> = {}
 
 export const initialRequests: RequestItem[] = [
   {

@@ -198,10 +198,11 @@ export default function AdminPage() {
   const [params, setParams] = useSearchParams()
   const { signOut } = useAuth()
   const {
+    contentLoading,
+    contentError,
     courses,
     weeks: allWeeks,
     papers: allPapers,
-    setWeeks,
     requests,
     toast,
   } = useApp()
@@ -347,7 +348,12 @@ export default function AdminPage() {
               Admin dashboard
             </h1>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Preview workspace · changes stay in this browser session
+              Course content is managed in Firestore · learner views update from
+              the same records
+            </p>
+            <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+              Announcements, learner requests, and activity logs are local
+              preview data and do not persist.
             </p>
           </div>
         </div>
@@ -383,198 +389,203 @@ export default function AdminPage() {
         </>
       )}
 
-      <div className="lg:flex lg:items-start lg:gap-6">
-        {wide && (
-          <aside className="sticky top-20 w-64 shrink-0">
-            <div className="card p-3">
-              <CourseSwitcher
-                course={course}
-                courses={courses}
-                onSelect={selectCourse}
-              />
-              <div className="mt-2">
-                <AdminSidebarNav {...nav} />
-              </div>
-            </div>
-          </aside>
-        )}
-
-        {/* Every section stays mounted so drafts, filters and forms survive switching. */}
-        <div className="min-w-0 flex-1">
-          <section
-            hidden={section !== "overview"}
-            aria-labelledby="admin-section-overview"
-          >
-            <SectionHeader
-              id="overview"
-              description={
-                course
-                  ? "Key numbers and open work for this course, plus learner requests from every course."
-                  : "Add a course to see its numbers and content health."
-              }
-              scope={courseScope}
-            />
-            {course ? (
-              <OverviewSection
-                course={course}
-                weeks={weeks}
-                papers={papers}
-                pending={pending}
-                audit={courseAudit}
-                onOpen={openFromOverview}
-              />
-            ) : (
-              noCourse
-            )}
-          </section>
-
-          <section
-            hidden={section !== "weeks"}
-            aria-labelledby="admin-section-weeks"
-          >
-            <SectionHeader
-              id="weeks"
-              description="Add, publish and back up weeks, then select a week to edit its questions."
-              scope={courseScope}
-            />
-            {course ? (
-              <div className="space-y-4">
-                <div ref={weeksTop} className={scrollMargin}>
-                  {/* Keyed by course so open forms, searches and restore previews never carry over. */}
-                  <WeeksPanel
-                    key={`weeks-${course.id}`}
-                    course={course}
-                    selectedId={selectedWeekId}
-                    onSelect={selectWeek}
-                    audit={courseAudit}
-                    onConfirm={setConfirm}
-                  />
+      {contentLoading ? (
+        <Panel role="status">Loading course content from Firestore…</Panel>
+      ) : contentError ? (
+        <Panel
+          role="alert"
+          className="border-red-300 text-red-700 dark:text-red-300"
+        >
+          <p className="font-semibold">
+            Course content management is unavailable.
+          </p>
+          <p className="mt-1 text-sm">{contentError}</p>
+          <p className="mt-2 text-sm">
+            No content changes have been applied. Check the connection and
+            reload before editing.
+          </p>
+        </Panel>
+      ) : (
+        <div className="lg:flex lg:items-start lg:gap-6">
+          {wide && (
+            <aside className="sticky top-20 w-64 shrink-0">
+              <div className="card p-3">
+                <CourseSwitcher
+                  course={course}
+                  courses={courses}
+                  onSelect={selectCourse}
+                />
+                <div className="mt-2">
+                  <AdminSidebarNav {...nav} />
                 </div>
-                {selectedWeek ? (
-                  <div ref={questionsTop} className={scrollMargin}>
-                    <QuestionList
-                      key={selectedWeek.id}
-                      listId={selectedWeek.id}
-                      ownerLabel={`Week ${selectedWeek.weekNumber}`}
-                      showFlags
+              </div>
+            </aside>
+          )}
+
+          {/* Every section stays mounted so drafts, filters and forms survive switching. */}
+          <div className="min-w-0 flex-1">
+            <section
+              hidden={section !== "overview"}
+              aria-labelledby="admin-section-overview"
+            >
+              <SectionHeader
+                id="overview"
+                description={
+                  course
+                    ? "Key numbers and open work for this course, plus learner requests from every course."
+                    : "Add a course to see its numbers and content health."
+                }
+                scope={courseScope}
+              />
+              {course ? (
+                <OverviewSection
+                  course={course}
+                  weeks={weeks}
+                  papers={papers}
+                  pending={pending}
+                  audit={courseAudit}
+                  onOpen={openFromOverview}
+                />
+              ) : (
+                noCourse
+              )}
+            </section>
+
+            <section
+              hidden={section !== "weeks"}
+              aria-labelledby="admin-section-weeks"
+            >
+              <SectionHeader
+                id="weeks"
+                description="Add, publish and back up weeks, then select a week to edit its questions."
+                scope={courseScope}
+              />
+              {course ? (
+                <div className="space-y-4">
+                  <div ref={weeksTop} className={scrollMargin}>
+                    {/* Keyed by course so open forms, searches and restore previews never carry over. */}
+                    <WeeksPanel
+                      key={`weeks-${course.id}`}
+                      course={course}
+                      selectedId={selectedWeekId}
+                      onSelect={selectWeek}
                       audit={courseAudit}
                       onConfirm={setConfirm}
-                      backLabel="Back to all weeks"
-                      onBack={() =>
-                        weeksTop.current?.scrollIntoView({
-                          behavior: "smooth",
-                          block: "start",
-                        })
-                      }
-                      onCountChange={(delta) =>
-                        setWeeks((current) =>
-                          current.map((week) =>
-                            week.id === selectedWeek.id
-                              ? {
-                                  ...week,
-                                  questionCount: Math.max(
-                                    0,
-                                    week.questionCount + delta,
-                                  ),
-                                }
-                              : week,
-                          ),
-                        )
-                      }
                     />
                   </div>
-                ) : (
-                  weeks.length > 0 && (
-                    <p className="rounded-2xl border border-dashed border-gray-300 px-5 py-8 text-center text-sm text-gray-600 dark:border-white/10 dark:text-gray-400">
-                      Select a week above to view and edit its questions.
-                    </p>
-                  )
-                )}
-              </div>
-            ) : (
-              noCourse
-            )}
-          </section>
+                  {selectedWeek ? (
+                    <div ref={questionsTop} className={scrollMargin}>
+                      <QuestionList
+                        key={selectedWeek.id}
+                        listId={selectedWeek.id}
+                        ownerCourseId={course.id}
+                        ownerType="week"
+                        ownerLabel={`Week ${selectedWeek.weekNumber}`}
+                        showFlags
+                        audit={courseAudit}
+                        onConfirm={setConfirm}
+                        backLabel="Back to all weeks"
+                        onBack={() =>
+                          weeksTop.current?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "start",
+                          })
+                        }
+                      />
+                    </div>
+                  ) : (
+                    weeks.length > 0 && (
+                      <p className="rounded-2xl border border-dashed border-gray-300 px-5 py-8 text-center text-sm text-gray-600 dark:border-white/10 dark:text-gray-400">
+                        Select a week above to view and edit its questions.
+                      </p>
+                    )
+                  )}
+                </div>
+              ) : (
+                noCourse
+              )}
+            </section>
 
-          <section
-            hidden={section !== "papers"}
-            aria-labelledby="admin-section-papers"
-          >
-            <SectionHeader
-              id="papers"
-              description="Previous-year papers with verified answers. Select a paper to manage its questions."
-              scope={courseScope}
-            />
-            {course ? (
-              <PapersPanel
-                key={`papers-${course.id}`}
-                course={course}
-                audit={courseAudit}
+            <section
+              hidden={section !== "papers"}
+              aria-labelledby="admin-section-papers"
+            >
+              <SectionHeader
+                id="papers"
+                description="Manage PYQ papers and their question records. Learners see only complete questions in published papers."
+                scope={courseScope}
+              />
+              {course ? (
+                <PapersPanel
+                  key={`papers-${course.id}`}
+                  course={course}
+                  audit={courseAudit}
+                  onConfirm={setConfirm}
+                />
+              ) : (
+                noCourse
+              )}
+            </section>
+
+            <section
+              hidden={section !== "courses"}
+              aria-labelledby="admin-section-courses"
+            >
+              <SectionHeader
+                id="courses"
+                description="Learners choose from published courses. Select a course to manage its content."
+                scope={siteScope}
+              />
+              <CoursesPanel
+                selectedId={courseId}
+                onSelect={selectCourse}
+                audit={audit}
                 onConfirm={setConfirm}
               />
-            ) : (
-              noCourse
-            )}
-          </section>
+            </section>
 
-          <section
-            hidden={section !== "courses"}
-            aria-labelledby="admin-section-courses"
-          >
-            <SectionHeader
-              id="courses"
-              description="Learners choose from published courses. Select a course to manage its content."
-              scope={siteScope}
-            />
-            <CoursesPanel
-              selectedId={courseId}
-              onSelect={selectCourse}
-              audit={audit}
-              onConfirm={setConfirm}
-            />
-          </section>
+            <section
+              hidden={section !== "requests"}
+              aria-labelledby="admin-section-requests"
+            >
+              <SectionHeader
+                id="requests"
+                description={`Learner messages from every course · ${requests.length} total · ${pending.length} pending`}
+                scope={siteScope}
+              />
+              <RequestsPanel
+                onConfirm={setConfirm}
+                audit={audit}
+                onOpenWeek={openReportedWeek}
+              />
+            </section>
 
-          <section
-            hidden={section !== "requests"}
-            aria-labelledby="admin-section-requests"
-          >
-            <SectionHeader
-              id="requests"
-              description={`Learner messages from every course · ${requests.length} total · ${pending.length} pending`}
-              scope={siteScope}
-            />
-            <RequestsPanel
-              onConfirm={setConfirm}
-              audit={audit}
-              onOpenWeek={openReportedWeek}
-            />
-          </section>
+            <section
+              hidden={section !== "announcement"}
+              aria-labelledby="admin-section-announcement"
+            >
+              <SectionHeader
+                id="announcement"
+                description="Shown as a popup to users when they open the site."
+                scope={siteScope}
+              />
+              <AnnouncementPanel audit={audit} />
+            </section>
 
-          <section
-            hidden={section !== "announcement"}
-            aria-labelledby="admin-section-announcement"
-          >
-            <SectionHeader
-              id="announcement"
-              description="Shown as a popup to users when they open the site."
-              scope={siteScope}
-            />
-            <AnnouncementPanel audit={audit} />
-          </section>
-
-          <section
-            hidden={section !== "audit"}
-            aria-labelledby="admin-section-audit"
-          >
-            <SectionHeader
-              id="audit"
-              description="Who changed what, when, and through which operation."
-              scope={siteScope}
-            />
-            <AuditPanel entries={auditLog} />
-          </section>
+            <section
+              hidden={section !== "audit"}
+              aria-labelledby="admin-section-audit"
+            >
+              <SectionHeader
+                id="audit"
+                description="Who changed what, when, and through which operation."
+                scope={siteScope}
+              />
+              <AuditPanel entries={auditLog} />
+            </section>
+          </div>
         </div>
-      </div>
+      )}
 
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
     </div>

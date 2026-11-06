@@ -13,6 +13,7 @@ import {
   currentStreak,
   MAX_ATTEMPTS,
   mergeProgress,
+  sortAttempts,
   type NewQuizAttempt,
   type ProgressData,
 } from "./progress"
@@ -25,6 +26,7 @@ import {
   removeProgress,
   writeProgress,
 } from "./progress-storage"
+import { loadCloudProgress, saveCloudProgress } from "./cloud-progress"
 
 interface Store {
   owner: string
@@ -63,12 +65,23 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     latest.current = current
   })
 
-  const commit = useCallback((data: ProgressData) => {
-    const next = { owner: latest.current.owner, data }
-    writeProgress(next.owner, data)
-    latest.current = next
-    setStore(next)
-  }, [])
+  const commit = useCallback(
+    (data: ProgressData) => {
+      const previous = latest.current
+      const next = { owner: previous.owner, data }
+      writeProgress(next.owner, data)
+      latest.current = next
+      setStore(next)
+      if (next.owner !== GUEST_OWNER) {
+        void saveCloudProgress(next.owner, previous.data, data).catch(() => {
+          toast(
+            "Your progress is saved on this device but couldn't sync to your account",
+          )
+        })
+      }
+    },
+    [toast],
+  )
 
   const toggleSaved = useCallback(
     (questionId: string) => {
@@ -112,24 +125,55 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     [commit],
   )
 
-  // Progress made while signed out moves into a learner's account. Running it
+  // Progress made while signed out moves into the authenticated account. Running it
   // twice (StrictMode, or another tab) is harmless: the guest copy is gone.
   const userId = user?.id
-  const isLearner = user?.role === "learner"
   useEffect(() => {
-    if (!userId || !isLearner) return
-    const guest = readProgress(GUEST_OWNER)
-    if (!guest) return
-    const { data, added } = mergeProgress(load(userId), guest)
-    writeProgress(userId, data)
-    removeProgress(GUEST_OWNER)
-    latest.current = { owner: userId, data }
-    setStore({ owner: userId, data })
-    if (added > 0)
-      toast(
-        `Synced ${added} quiz attempt${added === 1 ? "" : "s"} to your account`,
-      )
-  }, [userId, isLearner, toast])
+    if (!userId) return
+    let active = true
+    void (async () => {
+      try {
+        const cloud = await loadCloudProgress(userId)
+        if (!active) return
+        const local =
+          latest.current.owner === userId ? latest.current.data : load(userId)
+        const byId = new Map(
+          [...cloud.attempts, ...local.attempts].map((attempt) => [
+            attempt.id,
+            attempt,
+          ]),
+        )
+        let data: ProgressData = {
+          version: 1,
+          attempts: sortAttempts([...byId.values()]).slice(0, MAX_ATTEMPTS),
+          savedIds: [...new Set([...cloud.savedIds, ...local.savedIds])],
+        }
+        const guest = readProgress(GUEST_OWNER)
+        const addedFromGuest = guest ? mergeProgress(data, guest).added : 0
+        if (guest) data = mergeProgress(data, guest).data
+        writeProgress(userId, data)
+        latest.current = { owner: userId, data }
+        setStore({ owner: userId, data })
+        await saveCloudProgress(userId, cloud, data)
+        if (!active) return
+        if (guest) removeProgress(GUEST_OWNER)
+        if (addedFromGuest > 0)
+          toast(
+            `Synced ${addedFromGuest} quiz attempt${
+              addedFromGuest === 1 ? "" : "s"
+            } to your account`,
+          )
+      } catch {
+        if (active)
+          toast(
+            "Your account progress couldn't be loaded. Check your connection and try again",
+          )
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [userId, toast])
 
   // Keep other tabs' changes in sync.
   useEffect(() => {

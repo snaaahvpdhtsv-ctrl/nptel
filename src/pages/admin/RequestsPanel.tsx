@@ -52,8 +52,9 @@ function ReportDetails({
   report: QuestionReport
   onOpenWeek?: () => void
 }) {
+  const { questionBank } = useApp()
   const options = report.questionId
-    ? findQuestion(report.questionId)?.question.options
+    ? findQuestion(report.questionId, questionBank)?.question.options
     : undefined
   const answer = (index?: number) =>
     index === undefined

@@ -13,7 +13,8 @@ import {
 /** Resolves `:courseId`, scopes every learner page to that course, and rejects unknown or hidden courses. */
 export function CourseLayout() {
   const { courseId } = useParams()
-  const { courses, weeks, papers } = useApp()
+  const { courses, weeks, papers, questionBank, contentLoading, contentError } =
+    useApp()
   const course = courses.find(
     (item) => item.id === courseId && item.status === "published",
   )
@@ -26,13 +27,19 @@ export function CourseLayout() {
       course,
       path: (subpath = "") => coursePath(course.id, subpath),
       weeks: courseWeeks,
-      publishedWeeks: courseWeeks.filter((week) => week.status === "published"),
+      publishedWeeks: courseWeeks.filter(
+        (week) =>
+          week.status === "published" &&
+          (questionBank[week.id]?.length ?? 0) > 0,
+      ),
       papers: coursePapers,
       publishedPapers: coursePapers.filter(
-        (paper) => paper.status === "published",
+        (paper) =>
+          paper.status === "published" &&
+          (questionBank[paper.id]?.length ?? 0) > 0,
       ),
     }
-  }, [course, weeks, papers])
+  }, [course, weeks, papers, questionBank])
 
   const id = course?.id
   const title = course?.title
@@ -45,6 +52,27 @@ export function CourseLayout() {
       document.title = previousTitle
     }
   }, [id, title])
+
+  if (contentLoading) {
+    return (
+      <div
+        role="status"
+        className="learner-page mx-auto max-w-6xl px-4 py-16 text-center text-sm text-gray-500 dark:text-gray-400"
+      >
+        Loading published course content…
+      </div>
+    )
+  }
+
+  if (contentError) {
+    return (
+      <div className="learner-page mx-auto max-w-6xl px-4 py-16">
+        <NoticeCard title="Course content is temporarily unavailable">
+          {contentError}
+        </NoticeCard>
+      </div>
+    )
+  }
 
   if (!scope) {
     return (

@@ -1,5 +1,10 @@
 import type { Question, Week } from "./data"
-import { findQuestion, SAMPLE_SAVED_IDS, weekQuestions } from "./question-bank"
+import {
+  findQuestion,
+  SAMPLE_SAVED_IDS,
+  weekQuestions,
+  type QuestionBank,
+} from "./question-bank"
 
 export type QuizKind = "practice" | "mistakes"
 
@@ -9,6 +14,10 @@ export interface AttemptAnswer {
   /** Original index of the option the learner chose. */
   chosenIndex: number
   correct: boolean
+  /** Immutable attempt snapshot so history remains readable if the question is archived. */
+  questionText?: string
+  options?: string[]
+  correctAnswerIndex?: number
 }
 
 export interface QuizAttempt {
@@ -150,6 +159,7 @@ export function buildCourseProgress(
   allAttempts: QuizAttempt[],
   courseId: string,
   publishedWeeks: Week[],
+  questionBank: QuestionBank,
 ): CourseProgress {
   const attempts = allAttempts.filter(
     (attempt) => attempt.courseId === courseId,
@@ -166,7 +176,7 @@ export function buildCourseProgress(
     for (const answer of attempt.answers) {
       answered += 1
       if (answer.correct) correct += 1
-      const weekId = findQuestion(answer.questionId)?.weekId
+      const weekId = findQuestion(answer.questionId, questionBank)?.weekId
       if (!weekId) continue
       const entry = totals.get(weekId) ?? { answered: 0, correct: 0 }
       entry.answered += 1
@@ -179,7 +189,7 @@ export function buildCourseProgress(
   const weeks = [...publishedWeeks]
     .sort((a, b) => a.weekNumber - b.weekNumber)
     .map((week): WeekProgress => {
-      const questions = weekQuestions(week.id)
+      const questions = weekQuestions(week.id, questionBank)
       const mistakeIds: string[] = []
       let mastered = 0
       for (const question of questions) {

@@ -114,7 +114,7 @@ function CourseCard({ course, stats, gradient, index }: CourseCardProps) {
 }
 
 export default function CoursesPage() {
-  const { courses, weeks, papers } = useApp()
+  const { courses, weeks, papers, contentLoading, contentError } = useApp()
   const [query, setQuery] = useState("")
   const [lastCourseId] = useState(() => localStorage.getItem(LAST_COURSE_KEY))
   const published = courses.filter((course) => course.status === "published")
@@ -211,7 +211,23 @@ export default function CoursesPage() {
         </span>
       </div>
 
-      {published.length === 0 ? (
+      {contentLoading ? (
+        <p
+          role="status"
+          className="py-12 text-center text-sm text-gray-500 dark:text-gray-400"
+        >
+          Loading published courses…
+        </p>
+      ) : contentError ? (
+        <EmptyState icon={LibraryBig} title="Course content is unavailable">
+          <p
+            role="alert"
+            className="mt-2 text-sm text-red-600 dark:text-red-400"
+          >
+            {contentError}
+          </p>
+        </EmptyState>
+      ) : published.length === 0 ? (
         <EmptyState icon={LibraryBig} title="No courses are available yet">
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
             Courses appear here once they're published.

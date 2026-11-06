@@ -10,39 +10,45 @@ import {
   Search,
 } from "lucide-react"
 import { QuestionCard } from "../components/QuestionCard"
+import { useApp } from "../lib/app-context"
 import { useCourse } from "../lib/course-context"
-import { savedByWeek } from "../lib/data"
 import { useProgress } from "../lib/progress-context"
 
 export default function SavedPage() {
   const { savedIds, toggleSaved } = useProgress()
   // Every week of this course (hidden ones included), so bookmarks only show for this course.
   const { path, weeks } = useCourse()
+  const { questionBank } = useApp()
+  const groups = useMemo(
+    () =>
+      weeks
+        .map((week) => ({
+          week,
+          questions: questionBank[week.id] ?? [],
+        }))
+        .filter((group) => group.questions.length > 0),
+    [questionBank, weeks],
+  )
   const saved = useMemo(
     () =>
-      savedByWeek
-        .filter((group) => weeks.some((week) => week.id === group.weekId))
+      groups
         .flatMap((group) => group.questions.map((question) => question.id))
         .filter((id) => savedIds.includes(id)),
-    [savedIds, weeks],
+    [groups, savedIds],
   )
+  const unavailableSavedCount = useMemo(() => {
+    const publishedIds = new Set(
+      Object.values(questionBank).flatMap((questions) =>
+        questions.map((question) => question.id),
+      ),
+    )
+    return savedIds.filter((id) => !publishedIds.has(id)).length
+  }, [questionBank, savedIds])
   const [query, setQuery] = useState("")
   const [difficulty, setDifficulty] = useState("")
   const [weekFilter, setWeekFilter] = useState("")
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
-  const groups = useMemo(
-    () =>
-      savedByWeek
-        .map((group) => ({
-          week: weeks.find((week) => week.id === group.weekId)!,
-          questions: group.questions.filter((question) =>
-            saved.includes(question.id),
-          ),
-        }))
-        .filter((group) => group.week && group.questions.length > 0),
-    [saved, weeks],
-  )
   const normalizeDifficulty = (value?: string) => {
     const normalized = value?.trim().toLowerCase() ?? ""
     return normalized.charAt(0).toUpperCase() + normalized.slice(1)
@@ -63,6 +69,7 @@ export default function SavedPage() {
     ...group,
     questions: group.questions.filter(
       (question) =>
+        saved.includes(question.id) &&
         (!difficulty ||
           normalizeDifficulty(question.difficulty) === difficulty) &&
         matches([question.questionText, ...question.options]),
@@ -92,10 +99,16 @@ export default function SavedPage() {
           className="mx-auto text-gray-300 dark:text-gray-600 mb-4"
         />
         <h2 className="text-xl font-bold text-gray-500 dark:text-gray-400">
-          No saved questions
+          {unavailableSavedCount > 0
+            ? "Some saved questions aren't currently published"
+            : "No saved questions"}
         </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-          Bookmark questions while studying or practicing to save them here.
+          {unavailableSavedCount > 0
+            ? `${unavailableSavedCount} bookmark${
+                unavailableSavedCount === 1 ? "" : "s"
+              } remain saved, but their question content is archived or no longer published.`
+            : "Bookmark questions while studying or practicing to save them here."}
         </p>
         <Link
           to={path("/study")}
@@ -129,6 +142,17 @@ export default function SavedPage() {
           </div>
         </div>
       </motion.div>
+
+      {unavailableSavedCount > 0 && (
+        <p
+          role="status"
+          className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200"
+        >
+          {unavailableSavedCount} bookmark
+          {unavailableSavedCount === 1 ? " is" : "s are"} retained, but its
+          question content is archived or no longer published.
+        </p>
+      )}
 
       <div className="saved-filters mb-6 space-y-3">
         <div className="relative">
