@@ -165,7 +165,7 @@ Pre-existing/uncommitted work was preserved and is not included in the audit cha
 
 ## M. Production Firestore permission incident
 
-**Incident status:** **ROOT CAUSE CONFIRMED; NOT DEPLOYED/FIXED**
+**Incident status:** **DEPLOYED AND PRODUCTION-VERIFIED**
 
 The deployed Vercel bundle targets Firebase project `nptel-88452` and its
 learner query is:
@@ -186,28 +186,42 @@ verification now covers both document reads and the exact filtered collection
 query. The same emulator suite verifies learner writes are denied and only
 the trusted `admin == true` custom claim can write course content.
 
-The live Firebase Rules API returned:
+Before correction, the live Firebase Rules API returned:
 
 - release: `projects/nptel-88452/releases/cloud.firestore`
 - ruleset: `de207a4a-1ada-45af-abeb-8308da587648`
 - rules source: `allow read, write: if false;`
 - release update: `2026-11-01T16:29:58.282005Z`
 
-Therefore the exact production error is Firestore `403 PERMISSION_DENIED`
+Therefore the exact production error was Firestore `403 PERMISSION_DENIED`
 (`Missing or insufficient permissions`) caused by the deployed deny-all ruleset.
-The target project and deployed frontend agree; the live rules do not match the
-checked-in rules.
+The target project and deployed frontend agree; the live rules did not match
+the checked-in rules.
 
-Required correction, after explicit authorization:
+The authorized correction was deployed with:
 
 ```sh
 firebase deploy --only firestore:rules --project nptel-88452
 ```
 
-Review the exact `git diff -- firestore.rules` first. After deployment,
-re-query the release/ruleset API, load `/courses` in a signed-out browser, and
-confirm that an empty production collection renders the application's intended
-empty state—not a permission error. Do not seed content or deploy application
-changes as part of this rules-only correction.
+The active release now points to ruleset
+`d4d1a9cb-a267-4df6-a4d8-7c64f0c64260`, updated
+`2026-11-06T17:34:26.461360Z`. The active rules source matches the local
+`firestore.rules` byte-for-byte. The deployment JSON result contained no
+other resource changes.
+
+Production verification:
+
+- The exact unauthenticated filtered course query returned successfully with
+  zero documents.
+- A signed-out Playwright session loaded
+  `https://nptel-three-murex.vercel.app/courses` and rendered **“No courses are
+  available yet”**.
+- The permission error was absent.
+- Firestore listener responses returned HTTP 200.
+- Browser console errors were absent.
+- An unauthenticated production content write was rejected with
+  `permission-denied`; no document was created.
+- No courses or sample content were added.
 
 **Current recommendation:** do not certify the site as fully audited or production-complete. Source/emulator corrections are verified, but production Firebase, academic correctness, durable admin/feedback persistence and deployment remain unresolved.
