@@ -53,7 +53,7 @@ test("content service enforces publication and preserves stable question IDs", a
   await saveCourse(db, { ...course, status: "published" })
   await assert.rejects(
     () => saveWeek(db, { ...week, status: "published" }),
-    /at least one complete published question/,
+    /Publish at least one complete question/,
   )
 
   await saveQuestion(db, owner, question)

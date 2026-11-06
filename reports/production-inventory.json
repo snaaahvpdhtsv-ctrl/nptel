@@ -1,0 +1,23 @@
+{
+  "projectId": "nptel-88452",
+  "collectedAt": "2026-11-06",
+  "mode": "read-only",
+  "access": {
+    "applicationDefaultCredentials": "available",
+    "firebaseCliProjectListing": "project-not-listed",
+    "firestoreDatabaseListing": "permission-denied"
+  },
+  "counts": {
+    "courses": 0,
+    "weeks": 0,
+    "papers": 0,
+    "questions": 0,
+    "users": 0,
+    "bookmarks": 0,
+    "attempts": 0
+  },
+  "writesPerformed": false,
+  "backupCreated": false,
+  "migrationPerformed": false,
+  "deploymentPerformed": false
+}

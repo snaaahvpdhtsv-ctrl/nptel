@@ -23,6 +23,17 @@ for (const collection of collections) {
     throw new Error(`Allowlist field '${collection}' must be an array.`)
 }
 
+if (collections.every((collection) => allowlist[collection].length === 0)) {
+  console.log(
+    JSON.stringify(
+      { projectId, apply, created: 0, skipped: 0, conflicts: 0, noOp: true },
+      null,
+      2,
+    ),
+  )
+  process.exit(0)
+}
+
 initializeApp({ credential: applicationDefault(), projectId })
 const db = getFirestore()
 

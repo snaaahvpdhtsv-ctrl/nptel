@@ -1,7 +1,7 @@
 # NPTEL Website Audit Report
 
 **Audit date:** 2026-11-02 · **Project:** NPTEL Practice Platform · **Production URL:** https://nptel-three-murex.vercel.app/ · **Firebase project:** `nptel-88452`
-**Overall status:** **PARTIALLY VERIFIED** — source and emulator checks are complete for the accessible scope. Production Firebase administration, the authoritative course material, and deployment controls were not available, so the complete production state cannot be certified.
+**Overall status:** **PARTIALLY VERIFIED / MIGRATION BLOCKED** — source and emulator checks are complete for the accessible scope. Production Firebase read access is available only through previously authorized ADC reads; the Firebase CLI account cannot list `nptel-88452`, and the target production content is empty. No production write or deployment was performed.
 
 ## A. Audit coverage
 
@@ -127,14 +127,40 @@ Pre-existing/uncommitted work was preserved and is not included in the audit cha
 | Production Firebase/auth/rules | **NOT RUN** — console/API access unavailable; do not interpret emulator results as production validation. |
 | Full application unit/component/E2E suites | **NOT AVAILABLE** — no dedicated configured test scripts/framework found; browser checks were direct Playwright runs. |
 
-## J. Remaining work / manual action
+## J. Production migration readiness
 
-1. Grant read-only access to the Firebase project or provide a supervised console session to inspect production providers, domains, rules, indexes, collections and schemas.
+| Check | Result |
+|---|---|
+| Target project | `nptel-88452` |
+| Read-only inventory | **COMPLETE** — `courses`, `weeks`, `papers`, `questions`, `users`, bookmark subcollections, and attempt subcollections each contain 0 documents. |
+| Production backup | **NOT DONE** — no write was authorized, and no export was created. |
+| Legacy comparison | **COMPLETE FOR PLANNING** — legacy metadata claims 119 weekly and 166 PYQ questions, but only 13 complete weekly question objects exist; incomplete summaries are not migration candidates. |
+| Allowlisted migration | **READY, EMPTY BY DESIGN** — `scripts/migration-allowlist.json`; no records will be uploaded implicitly. |
+| Idempotency/conflict policy | **IMPLEMENTED** — `scripts/migrate-firestore.mjs` creates absent records, skips identical records, and stops on conflicts; it never overwrites existing records. |
+| Trusted validation | **IMPLEMENTED, NOT DEPLOYED** — callable Functions and transaction validation are present; App Check and frontend callable wiring remain pending. |
+| Rollback test | **NOT COMPLETE** — requires Functions/emulator package setup and a separate seeded dataset. |
+| Production deployment | **BLOCKED** — database is empty, backup is absent, allowlist is empty, and explicit authorization was not provided. |
+
+## K. Continuation test results
+
+| Check | Result |
+|---|---|
+| Trusted content-service emulator test | **PASS** — publication gating, stable question edits, last-question protection, empty bulk-import rejection, and duplicate-ID rejection. |
+| TypeScript | **PASS** — `node_modules/.bin/tsc --noEmit`. |
+| Formatting | **PASS** — `node_modules/.bin/oxfmt --check ...`. |
+| Production build | **PASS** — Vite build completed; the existing ~1.25 MB minified chunk warning remains. |
+| Migration safety guard | **PASS** — migration refuses to run without `FIREBASE_PROJECT_ID`, and refuses `--apply` without `FIRESTORE_MIGRATION_APPROVED=true`. |
+| Firebase CLI access | **PARTIAL** — CLI authentication lists other projects but not `nptel-88452`; no production write was attempted. |
+
+## L. Remaining work / manual action
+
+1. Grant Firebase CLI/Console access to `nptel-88452` or provide a supervised console session to inspect production providers, domains, rules, indexes and deployment settings.
 2. Provide the official NPTEL course source/material for content verification; do not fill missing academic data without it.
 3. Decide whether the production site should be publicly indexed. If yes, authorize changing the noindex/robots policy and adding a real sitemap.
 4. Decide and approve a schema-backed migration for durable feedback, reports, course content, admin edits, announcements and audit records. Protect all existing production data and use a backup/rollback plan.
-5. Authenticate/link Vercel to inspect production environment configuration and deployment records; the public frontend update is verified, but the build record and environment settings are not.
-6. After access and approval, verify production Google sign-in and the complete callback/session flow with a dedicated test account.
-7. Address code splitting as a separate regression-tested performance change.
+5. Install and test the Functions workspace against a separate emulator dataset, configure App Check, and switch admin writes to callable Functions.
+6. Create and verify a production Firestore export before populating the allowlist.
+7. After explicit authorization, migrate only reviewed records, validate every parent/question reference, deploy Rules/Functions, and perform production smoke tests.
+8. Address code splitting as a separate regression-tested performance change.
 
 **Current recommendation:** do not certify the site as fully audited or production-complete. Source/emulator corrections are verified, but production Firebase, academic correctness, durable admin/feedback persistence and deployment remain unresolved.

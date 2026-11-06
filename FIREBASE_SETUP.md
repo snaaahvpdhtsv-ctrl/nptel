@@ -11,8 +11,9 @@ question documents, not the legacy bundled metadata.
 The legacy arrays in `src/lib/data.ts` are retained as migration/reference
 material only. They are not an application fallback and are not automatically
 uploaded. Their historical counts must not be used as evidence that those
-questions exist in Firestore. No production inventory, backup, migration, or
-rules deployment has been run.
+questions exist in Firestore. A read-only production inventory has now
+confirmed that the target content and user collections are empty; no backup,
+migration, or rules deployment has been run.
 
 Signed-in quiz attempts and bookmarks use the user's Firestore subcollections.
 Announcements, feedback/report submissions, and their admin moderation remain
@@ -109,13 +110,55 @@ expose its credentials in Vercel frontend variables.
    the verified pre-migration export under an approved recovery plan; do not
    run a destructive reset or overwrite concurrent learner progress.
 
+## Trusted content service
+
+`functions/content-service.mjs` contains the transaction-level validation used
+by the callable Functions in `functions/index.mjs`. It validates course
+publication, parent ownership, stable question IDs, complete published
+questions, draft-only bulk imports, and last-question protection. The
+frontend's existing direct Firestore writers remain a compatibility path until
+the Functions are deployed and the admin client is switched to callable
+operations; do not treat direct Admin SDK writes as safe publication tooling.
+
+The Functions use App Check enforcement. Configure and verify App Check before
+enabling them for the production admin client. `firebase.json` now declares
+the Functions source, but Functions dependencies, emulator execution, and
+deployment remain pending.
+
 ## Verification still required before production rollout
 
-- Production Firestore content inventory and verified backup; neither has been
-  performed.
+- A verified production Firestore export backup before any write. The
+  read-only inventory found zero documents in `courses`, `weeks`, `papers`,
+  `questions`, `users`, bookmark subcollections, and attempt subcollections;
+  this is not a backup.
 - Emulator and browser integration tests for separate admin/learner sessions,
   bulk import, page refresh, bookmarks, and attempt history.
 - Add the six web config values to the GitHub Pages build and verify actual
   Firebase Auth (including Google sign-in and authorized domain).
 - Review and authorize production rules deployment, content migration, and
   GitHub Pages deployment. None has occurred in this work.
+
+## Safe migration command
+
+`scripts/migration-allowlist.json` is intentionally empty. Populate it only
+with manually reviewed, stable-ID records from an approved authoritative
+source. The migration is idempotent for identical existing records and stops
+on conflicts; it never overwrites an existing document.
+
+Dry-run against an emulator or approved staging project:
+
+```sh
+FIREBASE_PROJECT_ID=demo-nptel node scripts/migrate-firestore.mjs
+```
+
+Production writes require both a verified backup and an explicit approval
+environment variable:
+
+```sh
+FIREBASE_PROJECT_ID=nptel-88452 \
+FIRESTORE_MIGRATION_APPROVED=true \
+node scripts/migrate-firestore.mjs --apply
+```
+
+Do not run the production command while the allowlist is empty or before the
+content completeness review.
