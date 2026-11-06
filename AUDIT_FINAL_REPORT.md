@@ -163,4 +163,51 @@ Pre-existing/uncommitted work was preserved and is not included in the audit cha
 7. After explicit authorization, migrate only reviewed records, validate every parent/question reference, deploy Rules/Functions, and perform production smoke tests.
 8. Address code splitting as a separate regression-tested performance change.
 
+## M. Production Firestore permission incident
+
+**Incident status:** **ROOT CAUSE CONFIRMED; NOT DEPLOYED/FIXED**
+
+The deployed Vercel bundle targets Firebase project `nptel-88452` and its
+learner query is:
+
+```ts
+query(
+  collection(database, "courses"),
+  where("status", "==", "published"),
+  where("contentReady", "==", true),
+)
+```
+
+This query is intentionally unauthenticated for guest course browsing. The
+locally tested rules allow that query because `/courses/{courseId}` permits
+read when the existing document has `status == "published"` and
+`contentReady == true`; draft/unready courses remain denied. Local emulator
+verification now covers both document reads and the exact filtered collection
+query. The same emulator suite verifies learner writes are denied and only
+the trusted `admin == true` custom claim can write course content.
+
+The live Firebase Rules API returned:
+
+- release: `projects/nptel-88452/releases/cloud.firestore`
+- ruleset: `de207a4a-1ada-45af-abeb-8308da587648`
+- rules source: `allow read, write: if false;`
+- release update: `2026-11-01T16:29:58.282005Z`
+
+Therefore the exact production error is Firestore `403 PERMISSION_DENIED`
+(`Missing or insufficient permissions`) caused by the deployed deny-all ruleset.
+The target project and deployed frontend agree; the live rules do not match the
+checked-in rules.
+
+Required correction, after explicit authorization:
+
+```sh
+firebase deploy --only firestore:rules --project nptel-88452
+```
+
+Review the exact `git diff -- firestore.rules` first. After deployment,
+re-query the release/ruleset API, load `/courses` in a signed-out browser, and
+confirm that an empty production collection renders the application's intended
+empty state—not a permission error. Do not seed content or deploy application
+changes as part of this rules-only correction.
+
 **Current recommendation:** do not certify the site as fully audited or production-complete. Source/emulator corrections are verified, but production Firebase, academic correctness, durable admin/feedback persistence and deployment remain unresolved.

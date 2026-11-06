@@ -122,6 +122,15 @@ test("guests can read published content, not drafts", async () => {
   const database = testEnv.unauthenticatedContext().firestore()
   await assertSucceeds(getDoc(doc(database, "courses", "published")))
   await assertFails(getDoc(doc(database, "courses", "draft")))
+  await assertSucceeds(
+    getDocs(
+      query(
+        collection(database, "courses"),
+        where("status", "==", "published"),
+        where("contentReady", "==", true),
+      ),
+    ),
+  )
 })
 
 test("published content requires a published parent course and week or paper", async () => {
