@@ -189,8 +189,8 @@ export function enqueueProgressSync(
   next: ProgressData,
 ) {
   const queue = readProgressSyncQueue(ownerId)
-  const last = queue.at(-1)
-  if (last && JSON.stringify(last.next) === JSON.stringify(next)) return
+  if (queue.some((job) => JSON.stringify(job.next) === JSON.stringify(next)))
+    return
   queue.push({
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     ownerId,

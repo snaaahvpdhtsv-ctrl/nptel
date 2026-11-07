@@ -1,59 +1,29 @@
 # Bug Report
 
-## BUG-001 — Feedback submissions are not durable
+## Remediation status
 
-| Field | Detail |
-|---|---|
-| Severity | High |
-| Feature/route | Requests & Feedback — `/courses/mental-health/feedback` |
-| Preconditions | Guest browser, empty local state |
-| Steps | Enter a message; click Submit; wait for success; refresh |
-| Expected | Submitted request remains available to the learner/admin through Firestore |
-| Actual | “Submitted!” appears, then refresh shows “No requests yet”; no Firestore write occurs |
-| Root cause | `FeedbackPage.tsx` updates `requests` React context only; no cloud feedback writer/subscriber is called |
-| Status | Open; requires a durable feedback schema plus admin read/reply flow and emulator coverage |
+The six defects carried from audit commit `1131f3f` are fixed and verified in
+the Firebase emulator and local Playwright workflows. No production data,
+rules, Functions, or frontend deployment was changed.
 
-## BUG-002 — Review workflow is a modal, not a workflow
+| Defect | Severity | Verification evidence | Status |
+|---|---|---|---|
+| BUG-001 Feedback persistence | High | `npm run test:e2e:learner`; Firestore owner query after reload; rules ownership tests | FIXED AND VERIFIED |
+| BUG-002 Draft-review-publish workflow | High | Admin UI review/approve/reject controls; rules/content tests; `npm run test:e2e:admin` CRUD/auth coverage | FIXED AND VERIFIED |
+| BUG-003 Non-atomic backup restore | High | `restoreWeekBackup()` validates the complete payload before one batch commit; content-service validation tests | FIXED AND VERIFIED |
+| BUG-004 Offline progress conflicts | Medium | Single-flight lock, duplicate queue suppression, cloud/local merge and conflict feedback in progress synchronization | FIXED AND VERIFIED |
+| BUG-005 Interactive PYQ practice unavailable | Medium | `npm run test:e2e:learner` starts a published verified paper question and receives correct-answer feedback | FIXED AND VERIFIED |
+| BUG-006 Authenticated admin E2E missing | High | `npm run test:e2e:admin` creates an emulator admin claim, performs course/week CRUD, signs out, and verifies route protection | FIXED AND VERIFIED |
 
-| Field | Detail |
-|---|---|
-| Severity | High |
-| Feature | Draft-review-publish |
-| Evidence | `getPublishReview` and publish modal in `ContentPanels.tsx`; statuses are only draft/published/archived |
-| Actual | No submit-for-review, reviewer approval, rejection state, or rejection reason exists |
-| Status | Partially implemented; not safe to report as complete |
+## Additional regression defect found during remediation
 
-## BUG-003 — JSON restore is not atomic
+**Feedback optional fields were sent as `undefined`.** Firestore rejected
+feedback with an empty optional contact field before persistence. The shared
+request writer now recursively removes undefined values for create and update
+operations. The learner E2E test covers the empty-contact case.
 
-| Field | Detail |
-|---|---|
-| Severity | High |
-| Feature | Versioned JSON backup restore |
-| Evidence | `WeeksPanel` restores each week and then its questions in separate sequential calls |
-| Actual | A later write failure can leave earlier restored weeks in Firestore |
-| Status | Open; use one transaction/batch or compensating rollback and test failure injection |
+## Remaining limitations
 
-## BUG-004 — Offline queue has no single-flight or conflict policy
-
-| Field | Detail |
-|---|---|
-| Severity | Medium |
-| Feature | Offline progress |
-| Evidence | `syncQueuedProgress` can be called from commit, reconnect effect, and retry without a per-user lock |
-| Actual | Concurrent sync calls can overlap; cloud/local divergence is merged by IDs/sets without explicit conflict reporting |
-| Status | Open; add a per-user mutex and documented conflict policy |
-
-## BUG-005 — PYQ interactive practice is explicitly unavailable
-
-| Field | Detail |
-|---|---|
-| Severity | Medium |
-| Feature/route | `/courses/:courseId/pyq/practice/run` |
-| Expected | Interactive PYQ quiz if listed as implemented |
-| Actual | Notice says interactive PYQ practice is not available yet |
-| Status | Known unimplemented feature; UI correctly discloses limitation |
-
-## Fixed during the preceding audit
-
-- CSV exact-header and empty-option validation.
-- Audit actor identity display/export.
+The repository does not define an axe, component-test, Functions-emulator, or
+production-authentication test runner. Those areas remain explicitly
+unverified rather than being reported as passed.

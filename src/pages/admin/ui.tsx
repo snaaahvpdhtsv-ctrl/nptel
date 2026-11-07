@@ -161,6 +161,7 @@ export function StatusSelect({
       className="input"
     >
       <option value="draft">Draft</option>
+      <option value="review">Ready for review</option>
       <option value="published">Published</option>
       <option value="archived">Archived</option>
     </select>

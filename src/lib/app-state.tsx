@@ -19,6 +19,7 @@ import {
   type Announcement,
   type Course,
   type Paper,
+  type RequestItem,
   type Week,
 } from "./data"
 import { syncThemeColor } from "./offline"
@@ -40,6 +41,12 @@ import {
   subscribeToContent,
 } from "./cloud-content"
 import { firestore } from "./firebase"
+import {
+  createRequest as createCloudRequest,
+  deleteRequest as deleteCloudRequest,
+  subscribeToRequests,
+  updateRequest as updateCloudRequest,
+} from "./cloud-requests"
 
 const a11yClasses: Record<A11yKey, string> = {
   largeText: "a11y-large-text",
@@ -184,6 +191,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
     )
   }, [adminClaimsLoading, authLoading, user?.role])
+
+  useEffect(() => {
+    if (!firestore || authLoading || adminClaimsLoading || !user) {
+      setRequests(initialRequests)
+      return
+    }
+    return subscribeToRequests(
+      user.id,
+      user.role === "admin",
+      setRequests,
+      (error) =>
+        toast(`Requests could not be loaded: ${error.message}`, "error"),
+    )
+  }, [adminClaimsLoading, authLoading, toast, user])
+
+  const createRequest = useCallback(
+    async (request: RequestItem) => {
+      await createCloudRequest(request, user?.id)
+      setRequests((current) => [request, ...current])
+    },
+    [user?.id],
+  )
+
+  const updateRequest = useCallback(async (request: RequestItem) => {
+    await updateCloudRequest(request)
+    setRequests((current) =>
+      current.map((item) => (item.id === request.id ? request : item)),
+    )
+  }, [])
+
+  const deleteRequest = useCallback(async (request: RequestItem) => {
+    await deleteCloudRequest(request)
+    setRequests((current) => current.filter((item) => item.id !== request.id))
+  }, [])
 
   const saveCourse = useCallback(async (course: Course) => {
     await saveCloudCourse(course)
@@ -386,6 +427,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       questionBank,
       requests,
       setRequests,
+      createRequest,
+      updateRequest,
+      deleteRequest,
       announcement,
       setAnnouncement,
       toast,
@@ -413,6 +457,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       requests,
       announcement,
       toast,
+      createRequest,
+      updateRequest,
+      deleteRequest,
     ],
   )
 

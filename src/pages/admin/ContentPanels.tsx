@@ -24,7 +24,7 @@ import {
 } from "lucide-react"
 import { StatusBadge, difficultyClass } from "../../components/common"
 import { useApp } from "../../lib/app-context"
-import { isValidQuestion } from "../../lib/cloud-content"
+import { isValidQuestion, restoreWeekBackup } from "../../lib/cloud-content"
 import {
   type AdminQuestion,
   type Course,
@@ -841,6 +841,11 @@ export function QuestionList({
     closeForm = false,
   ) => {
     if (question.status === "published") {
+      const existing = questions.find((item) => item.id === question.id)
+      if (existing?.status !== "review" && existing?.status !== "published") {
+        toast("Submit the question for review before publishing it.", "error")
+        return false
+      }
       setPublishReview({ question, closeForm })
       return false
     }
@@ -1162,24 +1167,60 @@ export function QuestionList({
                     label={
                       question.status === "published"
                         ? "Hide from students"
-                        : "Make visible to students"
+                        : question.status === "review"
+                          ? "Review and publish question"
+                          : "Submit question for review"
                     }
                     onClick={async () => {
-                      const status: Status =
-                        question.status === "published" ? "draft" : "published"
-                      const saved = await requestQuestionSave({
+                      if (question.status === "published") {
+                        const saved = await requestQuestionSave({
+                          ...question,
+                          status: "draft",
+                        })
+                        if (saved) {
+                          audit("Question unpublished", ownerLabel)
+                          toast("Question unpublished")
+                        }
+                        return
+                      }
+                      if (question.status === "review") {
+                        setPublishReview({ question, closeForm: false })
+                        return
+                      }
+                      const saved = await persistQuestion({
                         ...question,
-                        status,
+                        status: "review",
+                        reviewNote: undefined,
                       })
-                      if (!saved) return
-                      audit(`Status → ${status}`, ownerLabel)
-                      toast(
-                        status === "published"
-                          ? "Question published"
-                          : "Question unpublished",
-                      )
+                      if (saved) {
+                        audit("Question submitted for review", ownerLabel)
+                        toast("Question submitted for review")
+                      }
                     }}
                   />
+                  {question.status === "review" && (
+                    <IconButton
+                      icon={X}
+                      label={`Reject question ${index + 1}`}
+                      tone="hover:text-red-500"
+                      onClick={async () => {
+                        const reason = window.prompt(
+                          "Why is this question being returned to draft?",
+                          question.reviewNote ?? "",
+                        )
+                        if (reason === null) return
+                        const saved = await persistQuestion({
+                          ...question,
+                          status: "draft",
+                          reviewNote: reason.trim() || "Returned for revision",
+                        })
+                        if (saved) {
+                          audit("Question returned for revision", ownerLabel)
+                          toast("Question returned to draft")
+                        }
+                      }}
+                    />
+                  )}
                   <IconButton
                     icon={PenLine}
                     label={`Edit question ${index + 1}`}
@@ -1755,23 +1796,11 @@ export function WeeksPanel({
               onClick={async () => {
                 if (!backupPreview) return
                 try {
-                  for (const week of backupPreview.weeks) {
-                    await saveWeek({
-                      ...week,
-                      status: "draft",
-                      contentReady: false,
-                    })
-                    const questionsForWeek =
-                      backupPreview.questions[week.id] ?? []
-                    if (questionsForWeek.length > 0)
-                      await saveQuestions(
-                        { id: week.id, courseId: course.id, type: "week" },
-                        questionsForWeek.map((question) => ({
-                          ...question,
-                          status: "draft",
-                        })),
-                      )
-                  }
+                  await restoreWeekBackup(
+                    course.id,
+                    backupPreview.weeks,
+                    backupPreview.questions,
+                  )
                   audit(
                     `Restored ${plural(backupPreview.weeks.length, "week")} as drafts`,
                     "Weeks",

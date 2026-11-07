@@ -15,6 +15,7 @@ import {
   type BackLinkProps,
 } from "../components/common"
 import { QuestionCard } from "../components/QuestionCard"
+import { QuizRunner } from "./PracticeQuizPage"
 import {
   ReportButton,
   ReportProblemDialog,
@@ -158,26 +159,52 @@ export function PyqPaperPage() {
 export function PyqPracticeRunPage() {
   const [params] = useSearchParams()
   const { path, publishedPapers } = useCourse()
+  const { questionBank } = useApp()
   const ids = (params.get("papers") || "").split(",").filter(Boolean)
   const chosen = publishedPapers.filter((paper) => ids.includes(paper.id))
+  const weeks = chosen.map((paper) => ({
+    id: paper.id,
+    courseId: paper.courseId,
+    weekNumber: paper.year,
+    title: paper.title,
+    questionCount: questionBank[paper.id]?.length ?? 0,
+    status: "published" as const,
+  }))
+  const questions = chosen.flatMap((paper) => questionBank[paper.id] ?? [])
 
+  if (questions.length === 0)
+    return (
+      <NoticePage
+        icon={Zap}
+        title="PYQ practice"
+        subtitle={
+          chosen.length
+            ? `${chosen.length} paper${
+                chosen.length === 1 ? "" : "s"
+              } · ${chosen.reduce((sum, paper) => sum + paper.questionCount, 0)} verified questions`
+            : "No papers selected"
+        }
+        back={{ to: path("/pyq/practice"), label: "Practice PYQs" }}
+        notice="This paper has no complete published questions available for practice."
+        action={
+          <Link to={path("/pyq/practice")} className="btn-primary px-5 py-2.5">
+            Back to paper selection
+          </Link>
+        }
+      />
+    )
   return (
-    <NoticePage
-      icon={Zap}
-      title="PYQ practice"
-      subtitle={
-        chosen.length
-          ? `${chosen.length} paper${
-              chosen.length === 1 ? "" : "s"
-            } · ${chosen.reduce((sum, paper) => sum + paper.questionCount, 0)} verified questions`
-          : "No papers selected"
-      }
-      back={{ to: path("/pyq/practice"), label: "Practice PYQs" }}
-      notice="Interactive PYQ practice is not available yet. Published questions and answers are available in the PYQ answer key."
-      action={
-        <Link to={path("/pyq/practice")} className="btn-primary px-5 py-2.5">
-          Back to paper selection
-        </Link>
+    <QuizRunner
+      kind="practice"
+      backTo={{ to: path("/pyq/practice"), label: "Practice PYQs" }}
+      weeks={weeks}
+      questions={questions}
+      shuffleQuestions={params.get("shuffle") !== "0"}
+      shuffleOptions={params.get("shuffleOptions") === "1"}
+      titleOverride={
+        chosen.length === 1
+          ? `${chosen[0].title} Practice`
+          : `PYQ Practice · ${chosen.length} papers`
       }
     />
   )

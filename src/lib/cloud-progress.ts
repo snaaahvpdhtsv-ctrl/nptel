@@ -13,6 +13,13 @@ import {
   removeProgressSyncJob,
 } from "./progress-storage"
 
+const syncLocks = new Map<string, Promise<SyncResult>>()
+
+export interface SyncResult {
+  synced: number
+  conflicts: number
+}
+
 type CloudChange = {
   ref: DocumentReference
   data?: Record<string, unknown>
@@ -99,10 +106,41 @@ export async function saveCloudProgress(
   }
 }
 
-export async function syncQueuedProgress(userId: string) {
-  const queue = readProgressSyncQueue(userId)
-  for (const job of queue) {
-    await saveCloudProgress(userId, job.previous, job.next)
-    removeProgressSyncJob(userId, job.id)
+export async function syncQueuedProgress(userId: string): Promise<SyncResult> {
+  const existing = syncLocks.get(userId)
+  if (existing) return existing
+  const run = (async () => {
+    let synced = 0
+    let conflicts = 0
+    for (const job of readProgressSyncQueue(userId)) {
+      const cloud = await loadCloudProgress(userId)
+      const cloudChanged =
+        JSON.stringify(cloud) !== JSON.stringify(job.previous)
+      const next = cloudChanged
+        ? {
+            version: 1 as const,
+            attempts: [
+              ...new Map(
+                [...cloud.attempts, ...job.next.attempts].map((attempt) => [
+                  attempt.id,
+                  attempt,
+                ]),
+              ).values(),
+            ],
+            savedIds: [...new Set([...cloud.savedIds, ...job.next.savedIds])],
+          }
+        : job.next
+      if (cloudChanged) conflicts += 1
+      await saveCloudProgress(userId, cloud, next)
+      removeProgressSyncJob(userId, job.id)
+      synced += 1
+    }
+    return { synced, conflicts }
+  })()
+  syncLocks.set(userId, run)
+  try {
+    return await run
+  } finally {
+    if (syncLocks.get(userId) === run) syncLocks.delete(userId)
   }
 }

@@ -135,7 +135,7 @@ function RequestCard({
   audit: (action: string) => void
   onOpenWeek?: () => void
 }) {
-  const { setRequests, toast } = useApp()
+  const { updateRequest, deleteRequest, toast } = useApp()
   const [note, setNote] = useState("")
   const [reply, setReply] = useState("")
   const [assigned, setAssigned] = useState(false)
@@ -144,21 +144,23 @@ function RequestCard({
   const StatusIcon = status.icon
   // Reports carry a multi-line message, so controls are named after the headline.
   const summary = item.report ? reportHeadline(item.report) : item.message
-  const update = (patch: Partial<RequestItem>) =>
-    setRequests((current) =>
-      current.map((request) =>
-        request.id === item.id ? { ...request, ...patch } : request,
-      ),
-    )
+  const update = async (patch: Partial<RequestItem>) => {
+    try {
+      await updateRequest({ ...item, ...patch })
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : "Request could not be updated",
+        "error",
+      )
+    }
+  }
   const remove = () =>
     onConfirm({
       title: "Delete this request?",
       body: "This request will be permanently deleted. This cannot be undone.",
       confirmLabel: "Delete request",
-      onConfirm: () => {
-        setRequests((current) =>
-          current.filter((request) => request.id !== item.id),
-        )
+      onConfirm: async () => {
+        await deleteRequest(item)
         audit("Request deleted")
         toast("Request deleted")
       },

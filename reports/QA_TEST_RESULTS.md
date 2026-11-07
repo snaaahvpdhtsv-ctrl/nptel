@@ -14,17 +14,19 @@
 | UI-002 | Practice | Week 1 | Select week enables start | Start enabled after selecting week | PASS | Playwright interaction |
 | UI-003 | Quiz | Week 1 | Answer, feedback, next, results, history | 10-question quiz completed; result and history persisted locally | PASS | Playwright interaction |
 | UI-004 | Bookmark | Quiz question | Toggle and saved page update | Local progress stored; saved page showed one question | PASS | Playwright interaction/localStorage |
-| UI-005 | Feedback | Guest feedback form | Submit and persistence | Submission message appears, but refresh loses request | FAIL | BUG-001 |
+| UI-005 | Feedback | Authenticated learner feedback form | Submit and persistence | Feedback is written to emulator Firestore and remains after reload | PASS | `npm run test:e2e:learner` |
 | RESP-001 | Responsive | 5 routes × 9 viewports | No page overflow/errors | No mobile page overflow or console errors; decorative aurora elements extend bounds on desktop without document scroll width | PASS | Playwright viewport matrix |
 | REG-001 | Rules | Firestore emulator | Security suite passes | 11/11 pass | PASS | `npm run test:rules` |
 | REG-002 | Content service | Firestore emulator | Content integrity suite passes | 2/2 pass | PASS | `npm run test:content-service` |
 | REG-003 | Type/build | Local | TypeScript/build pass | Pass; Vite emits existing large-chunk warning | PASS | `tsc --noEmit`, `npm run build` |
-| REG-004 | Formatting | Local | Audited files formatted | Audited files pass; whole-repository formatter reports `scripts/provision-admin.mjs` | PARTIAL | `oxfmt --check` |
+| REG-004 | Formatting | Local | Changed files formatted | Changed source and E2E files formatted | PASS | `npx oxfmt src/lib/cloud-requests.ts tests/learner.e2e.mjs` |
+| E2E-001 | Authenticated admin | Emulator admin account | CRUD, authorization and protected route behavior | Course/week CRUD passed; signed-out admin route redirected | PASS | `npm run test:e2e:admin` |
+| E2E-002 | Learner PYQ/feedback | Emulator learner account | Interactive PYQ and durable feedback | Correct answer feedback, Firestore persistence and reload passed | PASS | `npm run test:e2e:learner` |
 
 ## Blocked or unavailable
 
-- No configured Playwright test suite, axe suite, ESLint script, component test
-  runner, or Functions emulator test script exists.
+- No configured axe suite, ESLint script, component test runner, or Functions
+  emulator test script exists.
 - Production authentication, admin claims, live rules, and database reads were
   not independently re-authorized during this run.
 - No production writes or deployments were performed.

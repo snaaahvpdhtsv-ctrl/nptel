@@ -54,7 +54,7 @@ export function ReportProblemDialog({
   open: boolean
   onClose: () => void
 }) {
-  const { setRequests, toast } = useApp()
+  const { createRequest, toast } = useApp()
   const id = useId()
   const dialog = useRef<HTMLDialogElement>(null)
   const questionField = useRef<HTMLSelectElement>(null)
@@ -84,7 +84,7 @@ export function ReportProblemDialog({
     setError(null)
   }
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (number === null) {
       setError("question")
@@ -110,24 +110,25 @@ export function ReportProblemDialog({
         answered && draft.suggested !== null ? draft.suggested : undefined,
       details,
     }
-    setRequests((current) => [
-      {
-        id: `req-${Date.now()}`,
+    try {
+      await createRequest({
+        id: `pending-${Date.now()}`,
         courseId: week.courseId,
         type: "report",
         status: "pending",
         message: reportMessage(report),
         contact: draft.contact.trim() || undefined,
-        createdAt: new Date().toLocaleDateString(undefined, {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        }),
+        createdAt: new Date().toISOString(),
         age: "0h old",
         report,
-      },
-      ...current,
-    ])
+      })
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : "Report could not be sent",
+        "error",
+      )
+      return
+    }
     setDraft(emptyDraft)
     toast("Report sent. Thanks for helping fix the answer key!")
     onClose()

@@ -23,10 +23,10 @@ Verified:
 - The frontend currently writes directly through `src/lib/cloud-content.ts`;
   callable Functions are not invoked by the frontend. Firestore rules remain the
   effective client authorization boundary.
-- Backup restore uses the same direct client writes and is admin-gated by
-  Firestore rules, but no separate restore authorization or atomic rollback
-  mechanism exists.
-- Feedback rules exist, but the current learner form does not invoke Firestore.
+- Backup restore validates all records before an admin-only Firestore batch
+  commit and rejects payloads larger than the atomic batch limit.
+- Feedback writes include the authenticated owner ID and learner reads are
+  owner-scoped; the learner E2E verifies the persisted owner record.
 
 ## Production boundary
 

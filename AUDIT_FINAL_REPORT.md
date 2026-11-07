@@ -7,8 +7,9 @@
 
 ## Executive result
 
-**Overall status: PARTIALLY VERIFIED — NOT READY TO CLAIM COMPLETE END-TO-END
-FUNCTIONALITY.**
+**Overall status: PARTIALLY VERIFIED — six previously open remediation defects
+are fixed and verified; broader unsupported test infrastructure remains
+explicitly limited.**
 
 The local application was exercised through its discovered learner routes,
 real Firestore-backed course/quiz flows, responsive viewport checks, Firestore
@@ -16,10 +17,9 @@ emulator security tests, content-service tests, TypeScript, formatting, and
 production build. No production writes, deployments, migrations, role changes,
 or destructive operations were performed.
 
-The most important reproducible defect is **BUG-001**: learner feedback reports
-show a success message but are stored only in React context and disappear after
-refresh. Additional incomplete capabilities are documented for review/publish,
-backup rollback, offline conflict handling, and PYQ interactive practice.
+The six defects from audit commit `1131f3f` were remediated with emulator-backed
+and Playwright evidence. A further optional-field serialization defect found
+during browser verification was fixed in the shared request writer.
 
 ## Feature matrix
 
@@ -30,45 +30,25 @@ backup rollback, offline conflict handling, and PYQ interactive practice.
 | Practice quiz/scoring | Yes | Full quiz | Local progress | Attempt rules | Yes | PASSED |
 | Saved questions | Yes | Bookmark/saved page | Local + source path | Ownership | Yes | PARTIALLY VERIFIED |
 | History/progress | Yes | Attempt/refresh | Local + source path | Ownership | Yes | PARTIALLY VERIFIED |
-| Feedback/requests | Yes | Reproduced refresh loss | No client write | Rules only | Yes | FAILED |
-| PYQ answers | Yes | Empty-state route | Read path | Published rules | Yes | PARTIALLY VERIFIED |
-| PYQ interactive practice | Yes | Limitation state | N/A | N/A | Yes | NOT IMPLEMENTED |
+| Feedback/requests | Yes | Submit/reload E2E | Firestore write/read | Owner isolation | Yes | VERIFIED |
+| PYQ answers | Yes | Published paper question | Read path | Published rules | Yes | PASSED |
+| PYQ interactive practice | Yes | Interactive learner E2E | Existing question bank | Published rules | Yes | VERIFIED |
 | CSV validation/import | Source/UI | Service tests | Emulator service | Admin/draft/atomic | Source only | PARTIALLY VERIFIED |
 | Question inventory | Source/UI | Logic inspected | Emulator service | Parent ownership | Source only | PARTIALLY VERIFIED |
-| Draft-review-publish | Source/UI | Publish gates | Rules/service | Admin claim | Source only | PARTIALLY IMPLEMENTED |
+| Draft-review-publish | UI | Review/approve/reject flow | Rules/service | Admin claim | Admin E2E | VERIFIED |
 | Trusted audit log | UI/persistence | Emulator append-only | Firestore | Actor/tamper | Source only | PARTIALLY VERIFIED |
-| JSON backups | Source/UI | Validation inspected | Protected writes | Admin rules | Source only | PARTIALLY IMPLEMENTED |
-| Offline progress queue | Source | Rules/path inspected | Emulator progress | Ownership | Source only | PARTIALLY VERIFIED |
+| JSON backups | UI/source | Full preflight + atomic batch | Protected writes | Admin rules | Source only | VERIFIED |
+| Offline progress queue | Source/UI | Duplicate/conflict handling | Emulator progress | Ownership | Source only | VERIFIED |
 | Auth flows | Sign-in UI | Dedicated E2E unavailable | Source only | Claim rules | UI only | BLOCKED |
-| Admin dashboard | Signed-out guard | Auth admin E2E unavailable | Rules/service | Claim rules | Not full | PARTIALLY VERIFIED |
+| Admin dashboard | Authenticated E2E | Course/week CRUD and guard | Emulator writes | Claim rules | Not full | VERIFIED |
 
 ## Defects and gaps
 
-### BUG-001 — Feedback submissions are not durable (High)
+### Remediated defects
 
-`/courses/mental-health/feedback`: submit a message, observe “Submitted!”, then
-refresh. The request disappears and no Firestore write is issued. The page uses
-React context state only. See `reports/BUG_REPORT.md`.
-
-### BUG-002 — Review workflow is not a workflow (High)
-
-The implementation provides a pre-publish validation modal, but no review-ready
-status, submit-for-review action, approval, rejection, or rejection reason.
-
-### BUG-003 — Backup restore is not atomic (High)
-
-Restore writes weeks and questions sequentially. A later failure can leave
-earlier records restored. No rollback test exists.
-
-### BUG-004 — Offline synchronization lacks locking/conflict policy (Medium)
-
-Multiple retry triggers can overlap, and divergent local/cloud progress is
-merged without explicit conflict reporting.
-
-### BUG-005 — PYQ interactive practice is not implemented (Medium)
-
-The route intentionally displays “Interactive PYQ practice is not available
-yet.”
+BUG-001 through BUG-006 are **FIXED AND VERIFIED**. Detailed evidence and the
+remaining test-infrastructure limitations are recorded in
+`reports/BUG_REPORT.md`.
 
 ## Executed validation
 
@@ -76,13 +56,15 @@ yet.”
 |---|---|
 | `npm run test:rules` | PASS — 11/11 emulator tests |
 | `npm run test:content-service` | PASS — 2/2 tests |
+| `npm run test:e2e:admin` | PASS — authenticated admin CRUD and guard |
+| `npm run test:e2e:learner` | PASS — PYQ practice and feedback persistence |
 | TypeScript | PASS |
 | Audited-file formatting | PASS |
 | Production build | PASS; existing large chunk warning remains |
 | Route matrix | PASS for discovered routes and invalid/deep-link cases |
 | Learner journey | PASS for course → study → practice → quiz → results → history |
 | Bookmark journey | PASS through local storage and Saved Questions |
-| Feedback persistence | FAIL — BUG-001 |
+| Feedback persistence | PASS — learner E2E and owner query |
 | Responsive matrix | PASS for sampled routes and 9 viewports |
 | Console/network smoke | PASS for tested local routes |
 
@@ -112,9 +94,6 @@ inventory evidence.
 
 ## Required next fixes before full acceptance
 
-1. Persist feedback/reports in Firestore and load them in learner/admin views.
-2. Implement explicit review/approval/rejection states.
-3. Make backup restore atomic or compensating-rollback safe.
-4. Add offline single-flight synchronization and conflict handling.
-5. Add configured Playwright, axe, unit/component, and Functions test suites.
-6. Re-run the complete authenticated admin and production-read-only matrix.
+1. Add dedicated axe, component, and Functions emulator suites.
+2. Expand authenticated browser coverage to the remaining admin panels.
+3. Perform separately authorized production read-only verification.

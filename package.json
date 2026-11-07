@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "format": "oxfmt",
     "test:rules": "firebase emulators:exec --only firestore --project demo-nptel \"node --test tests/firestore.rules.test.mjs\"",
-    "test:content-service": "firebase emulators:exec --only firestore --project demo-nptel \"node --test tests/content-service.test.mjs\""
+    "test:content-service": "firebase emulators:exec --only firestore --project demo-nptel \"node --test tests/content-service.test.mjs\"",
+    "test:e2e:admin": "node tests/admin.e2e.mjs",
+    "test:e2e:learner": "node tests/learner.e2e.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

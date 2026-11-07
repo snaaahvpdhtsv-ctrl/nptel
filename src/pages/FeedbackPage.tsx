@@ -9,6 +9,7 @@ import {
   Wrench,
 } from "lucide-react"
 import { useApp } from "../lib/app-context"
+import { useAuth } from "../lib/auth-context"
 import { useCourse } from "../lib/course-context"
 
 export const requestTypes = {
@@ -44,7 +45,8 @@ export const requestTypeMeta = {
 } as const
 
 export default function FeedbackPage() {
-  const { requests, setRequests, toast } = useApp()
+  const { requests, createRequest, toast } = useApp()
+  const { user } = useAuth()
   const { course } = useCourse()
   const [form, setForm] = useState<{
     type: RequestType
@@ -56,43 +58,45 @@ export default function FeedbackPage() {
     contact: "",
   })
   const [submitting, setSubmitting] = useState(false)
-  const replies = requests.filter(
-    (item) =>
-      item.courseId === course.id &&
-      item.status === "replied" &&
-      item.reply &&
-      item.replyVisible !== false,
-  )
+  const submissions = requests.filter((item) => item.courseId === course.id)
 
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (!form.message.trim()) {
       toast("Please enter a message", "error")
       return
     }
+    if (!user) {
+      toast(
+        "Sign in to submit feedback that can be tracked across devices",
+        "error",
+      )
+      return
+    }
     setSubmitting(true)
-    window.setTimeout(() => {
-      setRequests((current) => [
-        {
-          id: `req-${Date.now()}`,
-          courseId: course.id,
-          type: form.type,
-          status: "pending",
-          message: form.message.trim(),
-          contact: form.contact.trim() || undefined,
-          createdAt: new Date().toLocaleDateString(undefined, {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          }),
-          age: "0h old",
-        },
-        ...current,
-      ])
+    try {
+      await createRequest({
+        id: `pending-${Date.now()}`,
+        courseId: course.id,
+        type: form.type,
+        status: "pending",
+        message: form.message.trim(),
+        contact: form.contact.trim() || undefined,
+        createdAt: new Date().toISOString(),
+        age: "0h old",
+      })
       setForm((current) => ({ ...current, message: "", contact: "" }))
       setSubmitting(false)
       toast("Submitted! It will appear here once admin replies")
-    }, 600)
+    } catch (error) {
+      setSubmitting(false)
+      toast(
+        error instanceof Error
+          ? error.message
+          : "Feedback could not be submitted",
+        "error",
+      )
+    }
   }
 
   return (
@@ -211,9 +215,9 @@ export default function FeedbackPage() {
 
       <div>
         <h2 className="text-lg font-bold font-display text-gray-800 dark:text-white mb-4">
-          Admin replies
+          Your submissions
         </h2>
-        {replies.length === 0 ? (
+        {submissions.length === 0 ? (
           <div className="card p-8 text-center">
             <p className="text-sm text-gray-500 dark:text-gray-400">
               No requests yet. Send feedback above to get started.
@@ -221,7 +225,7 @@ export default function FeedbackPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {replies.map((item) => {
+            {submissions.map((item) => {
               const type = requestTypeMeta[item.type] ?? requestTypes.feedback
               const Icon = type.icon
               return (
@@ -245,14 +249,21 @@ export default function FeedbackPage() {
                   <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
                     {item.message}
                   </p>
-                  <div className="mt-3 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                    <p className="text-xs font-semibold text-green-700 dark:text-green-300 mb-1">
-                      Admin reply {item.replyAt ? `· ${item.replyAt}` : ""}
+                  {item.status === "pending" && (
+                    <p className="mt-3 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                      Pending admin review
                     </p>
-                    <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">
-                      {item.reply}
-                    </p>
-                  </div>
+                  )}
+                  {item.reply && item.replyVisible !== false && (
+                    <div className="mt-3 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                      <p className="text-xs font-semibold text-green-700 dark:text-green-300 mb-1">
+                        Admin reply {item.replyAt ? `· ${item.replyAt}` : ""}
+                      </p>
+                      <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">
+                        {item.reply}
+                      </p>
+                    </div>
+                  )}
                 </motion.div>
               )
             })}

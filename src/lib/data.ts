@@ -1,4 +1,4 @@
-export type Status = "draft" | "published" | "archived"
+export type Status = "draft" | "review" | "published" | "archived"
 
 export interface Course {
   id: string
@@ -41,6 +41,7 @@ export type AdminQuestion = {
   options?: string[]
   topic?: string
   explanation?: string
+  reviewNote?: string
 }
 
 export type Paper = {

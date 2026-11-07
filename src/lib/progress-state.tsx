@@ -83,7 +83,13 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         if (!online) setSyncStatus("offline")
         else
           void syncQueuedProgress(next.owner)
-            .then(() => setSyncStatus("synced"))
+            .then(({ conflicts }) => {
+              setSyncStatus("synced")
+              if (conflicts > 0)
+                toast(
+                  "Progress synced while preserving changes made on another device",
+                )
+            })
             .catch(() => {
               setSyncStatus("error")
               toast(
@@ -103,8 +109,10 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     }
     setSyncStatus("syncing")
     try {
-      await syncQueuedProgress(user.id)
+      const result = await syncQueuedProgress(user.id)
       setSyncStatus("synced")
+      if (result.conflicts > 0)
+        toast("Progress synced while preserving changes made on another device")
     } catch {
       setSyncStatus("error")
     }

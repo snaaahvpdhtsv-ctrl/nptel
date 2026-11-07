@@ -70,6 +70,9 @@ export interface AppState {
   questionBank: QuestionBank
   requests: RequestItem[]
   setRequests: Dispatch<SetStateAction<RequestItem[]>>
+  createRequest: (request: RequestItem) => Promise<void>
+  updateRequest: (request: RequestItem) => Promise<void>
+  deleteRequest: (request: RequestItem) => Promise<void>
   /** The admin's site-wide announcement, shown to learners as a popup; null when there is none. */
   announcement: Announcement | null
   setAnnouncement: Dispatch<SetStateAction<Announcement | null>>

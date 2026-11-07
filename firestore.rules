@@ -34,7 +34,7 @@ service cloud.firestore {
     }
 
     function validStatus() {
-      return request.resource.data.status in ["draft", "published", "archived"]
+      return request.resource.data.status in ["draft", "review", "published", "archived"]
         && request.resource.data.contentReady is bool
         && request.resource.data.contentReady
           == (request.resource.data.status == "published");

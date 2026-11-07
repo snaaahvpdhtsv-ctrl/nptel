@@ -153,18 +153,25 @@ export function PyqPracticePage() {
       {publishedPapers.length === 0 ? (
         <NoPapers />
       ) : (
-        <EmptyState icon={Zap} title="PYQ practice quiz isn't available yet">
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-            Verified questions are available in the PYQ answer key. Interactive
-            quiz history for papers has not been implemented.
-          </p>
-          <Link
-            to={path("/pyq/answers")}
-            className="btn-outline mt-4 inline-flex min-h-[44px] items-center"
-          >
-            Browse paper listings
-          </Link>
-        </EmptyState>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {publishedPapers.map((paper) => (
+            <Link
+              key={paper.id}
+              to={path(`/pyq/practice/run?papers=${paper.id}&shuffle=0`)}
+              className="card card-hover p-5"
+            >
+              <h2 className="font-display font-bold text-gray-800 dark:text-white">
+                {paper.title}
+              </h2>
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                {paper.questionCount} verified questions
+              </p>
+              <span className="btn-primary mt-4 inline-flex px-4 py-2 text-sm">
+                Start practice
+              </span>
+            </Link>
+          ))}
+        </div>
       )}
     </div>
   )

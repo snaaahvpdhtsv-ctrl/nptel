@@ -11,6 +11,8 @@
 - Arrow/letter keyboard handlers and visible focus classes are present.
 - Accessibility preferences persist via `nptel-accessibility`.
 - Quiz answer targets use a minimum 44px height.
+- Authenticated feedback and admin E2E flows expose named form controls and
+  status feedback.
 
 ## Status
 

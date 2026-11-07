@@ -21,7 +21,9 @@ export interface CloudContent {
 }
 
 const asStatus = (value: unknown): Status =>
-  value === "published" || value === "archived" ? value : "draft"
+  value === "review" || value === "published" || value === "archived"
+    ? value
+    : "draft"
 
 const asCourse = (id: string, value: DocumentData): Course => ({
   ...value,
@@ -88,6 +90,8 @@ const asQuestion = (id: string, value: DocumentData): AdminQuestion => {
     topic: typeof value.topic === "string" ? value.topic : undefined,
     explanation:
       typeof value.explanation === "string" ? value.explanation : undefined,
+    reviewNote:
+      typeof value.reviewNote === "string" ? value.reviewNote : undefined,
     status:
       value.status === "published" && value.contentReady !== true
         ? "draft"
@@ -427,6 +431,7 @@ export async function saveQuestions(
         "A published question needs text, 2–6 non-empty options, and a valid correct answer.",
       )
   }
+
   const batch = writeBatch(database)
   for (const question of questions) {
     const { id, ...data } = question
@@ -443,6 +448,74 @@ export async function saveQuestions(
       }),
       { merge: true },
     )
+  }
+  await batch.commit()
+}
+
+export async function restoreWeekBackup(
+  courseId: string,
+  weeks: Week[],
+  questions: Record<string, AdminQuestion[]>,
+) {
+  const database = requireFirestore()
+  const records = weeks.flatMap((week) => [
+    { collection: "weeks", id: week.id },
+    ...(questions[week.id] ?? []).map((question) => ({
+      collection: "questions",
+      id: question.id,
+    })),
+  ])
+  if (records.length === 0) throw new Error("The backup contains no records.")
+  if (records.length > 500)
+    throw new Error("This backup is too large to restore atomically.")
+  const ids = new Set<string>()
+  for (const week of weeks) {
+    if (
+      week.courseId !== courseId ||
+      !week.id ||
+      !Number.isInteger(week.weekNumber) ||
+      week.weekNumber <= 0 ||
+      !week.title.trim()
+    )
+      throw new Error("The backup contains an invalid week.")
+    if (ids.has(week.id)) throw new Error(`Duplicate backup ID: ${week.id}`)
+    ids.add(week.id)
+    for (const question of questions[week.id] ?? []) {
+      if (ids.has(question.id))
+        throw new Error(`Duplicate backup ID: ${question.id}`)
+      if (!isValidQuestion({ ...question, status: "draft" }))
+        throw new Error(`Backup question ${question.id} is invalid.`)
+      ids.add(question.id)
+    }
+  }
+  const batch = writeBatch(database)
+  for (const week of weeks) {
+    const { questionCount: _questionCount, ...data } = documentPayload(week)
+    batch.set(
+      doc(database, "weeks", week.id),
+      withoutUndefined({
+        ...data,
+        courseId,
+        status: "draft",
+        contentReady: false,
+      }),
+      { merge: true },
+    )
+    for (const question of questions[week.id] ?? []) {
+      const { id, ...questionData } = question
+      batch.set(
+        doc(database, "questions", id),
+        withoutUndefined({
+          ...questionData,
+          courseId,
+          weekId: week.id,
+          paperId: null,
+          status: "draft",
+          contentReady: false,
+        }),
+        { merge: true },
+      )
+    }
   }
   await batch.commit()
 }

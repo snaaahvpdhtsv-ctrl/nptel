@@ -525,7 +525,7 @@ function ResultsPanel({
   )
 }
 
-interface QuizRunnerProps {
+export interface QuizRunnerProps {
   kind: QuizKind
   /** Where Back, the breadcrumb and the results page lead. */
   backTo: BackLinkProps
@@ -533,15 +533,17 @@ interface QuizRunnerProps {
   questions: Question[]
   shuffleQuestions: boolean
   shuffleOptions: boolean
+  titleOverride?: string
 }
 
-function QuizRunner({
+export function QuizRunner({
   kind,
   backTo,
   weeks,
   questions,
   shuffleQuestions,
   shuffleOptions,
+  titleOverride,
 }: QuizRunnerProps) {
   const { course, path } = useCourse()
   const { toast, questionBank } = useApp()
@@ -582,9 +584,10 @@ function QuizRunner({
     phase === "results" ? 100 : Math.round(((index + 1) / total) * 100)
   const official = weeks.reduce((sum, week) => sum + week.questionCount, 0)
   const title =
-    kind === "mistakes"
+    titleOverride ??
+    (kind === "mistakes"
       ? `Mistakes review · ${total} question${total === 1 ? "" : "s"}`
-      : quizTitle(weeks)
+      : quizTitle(weeks))
   const saved = savedIds.includes(item.question.id)
 
   // The clock only runs while answering; it pauses on the results and review screens.

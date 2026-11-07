@@ -260,6 +260,7 @@ export function StatusBadge({ status }: { status?: string }) {
   const value = status || "published"
   const styles: Record<string, string> = {
     draft: "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
+    review: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
     published:
       "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
     archived:
@@ -267,6 +268,7 @@ export function StatusBadge({ status }: { status?: string }) {
   }
   const labels: Record<string, string> = {
     draft: "Draft",
+    review: "Review",
     published: "Published",
     archived: "Archived",
   }
