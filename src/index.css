@@ -104,6 +104,16 @@ body {
   filter: contrast(1.12);
 }
 
+.a11y-high-contrast :where(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: 3px;
+}
+
+.a11y-high-contrast .qcard-option {
+  min-height: 44px;
+  border-width: 2px;
+}
+
 .a11y-dyslexia-spacing body {
   letter-spacing: 0.02em;
   word-spacing: 0.08em;

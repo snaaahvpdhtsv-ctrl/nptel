@@ -47,6 +47,29 @@ const a11yClasses: Record<A11yKey, string> = {
   reducedMotion: "a11y-reduced-motion",
   dyslexiaSpacing: "a11y-dyslexia-spacing",
 }
+const A11Y_STORAGE_KEY = "nptel-accessibility"
+const defaultA11y: Record<A11yKey, boolean> = {
+  largeText: false,
+  highContrast: false,
+  reducedMotion: false,
+  dyslexiaSpacing: false,
+}
+
+function readA11yPreferences() {
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(A11Y_STORAGE_KEY) ?? "null",
+    ) as Partial<Record<A11yKey, boolean>> | null
+    return Object.fromEntries(
+      (Object.keys(defaultA11y) as A11yKey[]).map((key) => [
+        key,
+        stored?.[key] === true,
+      ]),
+    ) as Record<A11yKey, boolean>
+  } catch {
+    return defaultA11y
+  }
+}
 
 function requirePublishedQuestion(
   owner: {
@@ -78,12 +101,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dark, setDark] = useState(
     () => localStorage.getItem("nptel-theme") !== "light",
   )
-  const [a11y, setA11y] = useState<Record<A11yKey, boolean>>({
-    largeText: false,
-    highContrast: false,
-    reducedMotion: false,
-    dyslexiaSpacing: false,
-  })
+  const [a11y, setA11y] =
+    useState<Record<A11yKey, boolean>>(readA11yPreferences)
   const [courses, setCourses] = useState<Course[]>([])
   const [weeks, setWeeks] = useState<Week[]>([])
   const [papers, setPapers] = useState<Paper[]>([])
@@ -112,6 +131,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [dark])
 
   useEffect(() => {
+    localStorage.setItem(A11Y_STORAGE_KEY, JSON.stringify(a11y))
     for (const key of Object.keys(a11yClasses) as A11yKey[]) {
       document.documentElement.classList.toggle(a11yClasses[key], a11y[key])
     }

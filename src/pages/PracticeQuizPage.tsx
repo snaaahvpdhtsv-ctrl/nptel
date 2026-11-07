@@ -274,7 +274,8 @@ function QuizQuestion({
               data-tone={tone}
               onClick={() => onChoose(optionPosition)}
               aria-keyshortcuts={letter(optionPosition)}
-              className={`qcard-option flex w-full items-center gap-3 rounded-xl border px-4 py-3.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 disabled:cursor-default ${optionTone[tone]}`}
+              aria-label={`Option ${letter(optionPosition)}: ${question.options[optionIndex]}`}
+              className={`qcard-option flex min-h-11 w-full items-center gap-3 rounded-xl border px-4 py-3.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 disabled:cursor-default ${optionTone[tone]}`}
             >
               <span
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors ${letterTone[tone]}`}
