@@ -270,6 +270,13 @@ const templateColumns = [
   "topic",
 ]
 
+type CsvIssue = {
+  row: number
+  field: string
+  reason: string
+  value: string
+}
+
 function BulkUpload({
   existing,
   onImport,
@@ -285,7 +292,7 @@ function BulkUpload({
   const [result, setResult] = useState<{
     fileName: string
     valid: AdminQuestion[]
-    errors: string[]
+    errors: CsvIssue[]
   } | null>(null)
 
   const csvInfoText = `CSV upload format
@@ -312,7 +319,15 @@ Example row:
       return toast("File too large — maximum 5 MB", "error")
     if (!/\.csv$/i.test(file.name))
       return toast("Only CSV files can be read in this preview", "error")
-    const rows = parseCsv(await file.text())
+    let rows: string[][]
+    try {
+      rows = parseCsv(await file.text())
+    } catch {
+      return toast(
+        "This CSV file couldn't be read. Check its encoding.",
+        "error",
+      )
+    }
     if (rows.length < 2) return toast("No rows found in file", "error")
     if (rows.length - 1 > 450)
       return toast("File too large — maximum 450 rows", "error")
@@ -333,7 +348,7 @@ Example row:
       existing.map((question) => question.questionText.trim().toLowerCase()),
     )
     const valid: AdminQuestion[] = []
-    const errors: string[] = []
+    const errors: CsvIssue[] = []
     rows.slice(1).forEach((row, index) => {
       const rowNumber = index + 2
       const get = (name: string) =>
@@ -347,19 +362,62 @@ Example row:
       const correct = /^[a-z]$/i.test(answer)
         ? answer.toUpperCase().charCodeAt(0) - 65
         : Number(answer) - 1
-      let error = ""
-      if (!text) error = "Question text is missing."
-      else if (options.length < 2 || options.length > 6)
-        error = "Question must have between 2 and 6 options."
-      else if (
+      const rowIssues: CsvIssue[] = []
+      if (!text)
+        rowIssues.push({
+          row: rowNumber,
+          field: "questionText",
+          reason: "Question text is missing.",
+          value: text,
+        })
+      if (options.length < 2 || options.length > 6)
+        rowIssues.push({
+          row: rowNumber,
+          field: "options",
+          reason: "Question must have between 2 and 6 options.",
+          value: get("options"),
+        })
+      if (
+        new Set(options.map((option) => option.toLowerCase())).size !==
+        options.length
+      )
+        rowIssues.push({
+          row: rowNumber,
+          field: "options",
+          reason: "Options must be unique.",
+          value: get("options"),
+        })
+      if (
         !Number.isInteger(correct) ||
         correct < 0 ||
         correct >= options.length
       )
-        error = "Question has no valid correct answer."
-      else if (seen.has(text.toLowerCase())) error = "duplicate question"
-      if (error) {
-        errors.push(`Row ${rowNumber}: ${error}`)
+        rowIssues.push({
+          row: rowNumber,
+          field: "correctAnswer",
+          reason: "Use a letter or number that points to an existing option.",
+          value: answer,
+        })
+      if (seen.has(text.toLowerCase()))
+        rowIssues.push({
+          row: rowNumber,
+          field: "questionText",
+          reason: "This question already exists in the current week.",
+          value: text,
+        })
+      const difficulty = get("difficulty")
+      if (
+        difficulty &&
+        !["easy", "medium", "hard"].includes(difficulty.toLowerCase())
+      )
+        rowIssues.push({
+          row: rowNumber,
+          field: "difficulty",
+          reason: "Use Easy, Medium, or Hard.",
+          value: difficulty,
+        })
+      if (rowIssues.length > 0) {
+        errors.push(...rowIssues)
         return
       }
       seen.add(text.toLowerCase())
@@ -371,7 +429,7 @@ Example row:
         correctAnswerIndex: correct,
         difficulty:
           ["Easy", "Medium", "Hard"].find(
-            (item) => item.toLowerCase() === get("difficulty").toLowerCase(),
+            (item) => item.toLowerCase() === difficulty.toLowerCase(),
           ) ?? "",
         topic: get("topic") || undefined,
         explanation: get("explanation") || undefined,
@@ -379,6 +437,22 @@ Example row:
       })
     })
     setResult({ fileName: file.name, valid, errors })
+  }
+
+  const downloadErrors = () => {
+    if (!result || result.errors.length === 0) return
+    const report = [
+      ["row", "field", "reason", "value"],
+      ...result.errors.map((error) => [
+        String(error.row),
+        error.field,
+        error.reason,
+        error.value,
+      ]),
+    ]
+      .map((row) => row.map(csvCell).join(","))
+      .join("\n")
+    downloadFile("questions-upload-errors.csv", report, "text/csv")
   }
 
   return (
@@ -453,15 +527,71 @@ Example row:
             <strong className="text-gray-800 dark:text-white">
               {result.fileName}
             </strong>{" "}
-            — {plural(result.valid.length, "row")} ready, {result.errors.length}{" "}
-            rejected. Review before writing.
+            — {plural(result.valid.length, "row")} ready,{" "}
+            {new Set(result.errors.map((error) => error.row)).size} rejected.
+            Review before writing.
           </p>
           {result.errors.length > 0 && (
-            <ul className="max-h-32 overflow-y-auto rounded-lg bg-red-50 p-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-300">
-              {result.errors.map((error) => (
-                <li key={error}>{error}</li>
-              ))}
-            </ul>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-red-700 dark:text-red-300">
+                  {plural(result.errors.length, "validation issue")}
+                </p>
+                <button
+                  type="button"
+                  onClick={downloadErrors}
+                  className={smallOutline}
+                >
+                  <Download size={14} />
+                  Download error report
+                </button>
+              </div>
+              <div className="max-h-40 overflow-auto rounded-lg border border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/30">
+                <table className="min-w-full text-left text-xs text-red-800 dark:text-red-200">
+                  <thead className="border-b border-red-200 dark:border-red-900/50">
+                    <tr>
+                      <th className="px-2 py-1.5 font-semibold">Row</th>
+                      <th className="px-2 py-1.5 font-semibold">Field</th>
+                      <th className="px-2 py-1.5 font-semibold">Problem</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.errors.slice(0, 50).map((error, index) => (
+                      <tr
+                        key={`${error.row}-${error.field}-${index}`}
+                        className="border-b border-red-100 last:border-0 dark:border-red-900/30"
+                      >
+                        <td className="whitespace-nowrap px-2 py-1.5">
+                          {error.row}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1.5">
+                          {error.field}
+                        </td>
+                        <td className="px-2 py-1.5">{error.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {result.errors.length > 50 && (
+                  <p className="px-2 py-1.5 text-xs">
+                    Showing the first 50 issues. Download the report for all
+                    issues.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+          {result.valid.length > 0 && (
+            <div className="rounded-lg border border-green-200 bg-green-50 p-2 text-xs text-green-800 dark:border-green-900/50 dark:bg-green-950/25 dark:text-green-200">
+              <p className="font-semibold">Ready to import</p>
+              <p className="mt-1">
+                {result.valid
+                  .slice(0, 3)
+                  .map((question) => question.questionText)
+                  .join(" · ")}
+                {result.valid.length > 3 && " · …"}
+              </p>
+            </div>
           )}
           <div className="flex flex-wrap gap-2">
             <button
