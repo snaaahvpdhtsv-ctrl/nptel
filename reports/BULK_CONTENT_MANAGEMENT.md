@@ -61,9 +61,9 @@ Publishing rejects incomplete or unreviewed questions.
 
 Firebase callable operations record import and bulk-edit metadata in the
 admin-only `bulkOperations` collection. Import-created questions carry the
-operation ID. Rollback is transaction-backed, idempotent, and deletes only
-questions still carrying that operation ID; later edits therefore prevent
-silent deletion.
+operation ID and an immutable creation snapshot. Rollback is transaction-backed
+and idempotent: unchanged operation-owned records are deleted, while records
+whose content changed later are preserved and reported as conflicts.
 
 This is distinct from version history and from JSON backup restoration:
 rollback undoes one tracked operation, while backup restoration restores a

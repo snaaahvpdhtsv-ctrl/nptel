@@ -132,6 +132,10 @@ if (import.meta.env.DEV && firestore) {
       const port = Number(rawPort)
       if (host && Number.isInteger(port) && port > 0)
         connectFunctionsEmulator(firebaseFunctions, host, port)
+      else
+        throw new Error(
+          "VITE_FIREBASE_FUNCTIONS_EMULATOR_HOST must be formatted as host:port.",
+        )
     }
   }
 }

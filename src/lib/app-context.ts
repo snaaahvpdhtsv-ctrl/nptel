@@ -59,7 +59,11 @@ export interface AppState {
     questions: AdminQuestion[],
   ) => Promise<void>
   bulkUpdateQuestions: (
-    owner: { id: string courseId: string type: "week" | "paper" },
+    owner: {
+      id: string
+      courseId: string
+      type: "week" | "paper"
+    },
     questionIds: string[],
     patch: Partial<Pick<AdminQuestion, "difficulty" | "topic" | "explanation" | "status">>,
   ) => Promise<void>

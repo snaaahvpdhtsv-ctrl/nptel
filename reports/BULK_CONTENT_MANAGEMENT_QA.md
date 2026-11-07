@@ -20,6 +20,9 @@
 | Accessibility scan | 23 rules, 0 violations |
 | Large-dataset browser benchmark | 100/500/1,000 records passed |
 | Production build | Passed |
+| Callable Functions integration | 1/1 passed |
+| Functions browser E2E | Passed |
+| TypeScript | Passed |
 
 Commands:
 
@@ -27,8 +30,11 @@ Commands:
 npm run test:bulk-content
 npm run test:content-service
 npm run test:rules
+npm run test:functions-callable
 npm run test:e2e:admin
 npm run test:e2e:learner
+npm run test:e2e:functions-bulk
+npx tsc --noEmit
 npm run test:accessibility
 npm run test:performance
 npm run build
@@ -51,6 +57,46 @@ npm run build
 The broader browser and accessibility/performance checks pass for the existing
 application scope, but they do not yet exercise the callable bulk workflows
 end to end.
+
+## Functions emulator integration
+
+The isolated browser harness starts Auth on `127.0.0.1:9099`, Firestore on
+`127.0.0.1:8080`, Functions on `127.0.0.1:5001`, and Vite on a test-only
+port. It sets `VITE_FIREBASE_FUNCTIONS_EMULATOR_HOST` only for that process;
+production Firebase configuration is unchanged. Functions dependencies must be
+installed with `npm install --prefix functions`.
+
+Callable contracts:
+
+| Callable | Request | Authorization | Side effects |
+|---|---|---|---|
+| `importQuestionOperation` | `{ owner, questions, metadata }` | Authenticated custom claim `admin: true` | Creates draft questions and one `bulkOperations` import record |
+| `updateQuestionOperation` | `{ owner, questionIds, patch }` | Authenticated custom claim `admin: true` | Validates ownership/readiness, updates questions, records an edit/publish operation |
+| `rollbackImportOperationContent` | `{ operationId }` | Authenticated custom claim `admin: true` | Deletes unchanged operation-owned imports or records conflicts without deleting newer content |
+
+Unauthenticated and learner callers are rejected with
+`functions/permission-denied`. Invalid ownership, duplicate IDs, incomplete
+publication, and stale rollback records fail without unauthorized writes.
+
+The callable unit/integration test verifies authorization, draft persistence,
+operation history, bulk editing, conflict-preserving rollback, and
+idempotent repeated rollback. The browser test verifies JSON preview with a
+blocking row, callable-backed import, refresh-visible draft content, bulk
+difficulty editing, operation history, row results, and rollback conflict
+preservation.
+
+## Retry and partial failure policy
+
+The supported operation is one bounded Firestore transaction of at most 450
+rows. It therefore fails atomically rather than producing partial row
+successes. Retryable per-row failures, network interruption recovery, and
+multi-batch resume are **NOT VERIFIED / NOT IMPLEMENTED** for this bounded
+transaction model; no successful row can be duplicated by retrying the same
+operation because the operation either commits once or fails before commit.
+
+Cleanup is automatic in the browser and callable tests. For an interrupted
+run, stop emulator processes and remove only isolated `demo-nptel` emulator
+data; never point these commands at a production project.
 
 ## Remaining verification gaps
 

@@ -27,7 +27,10 @@ function requireAdmin(request) {
 
 function callable(operation) {
   return onCall(
-    { enforceAppCheck: true, maxInstances: 10 },
+    {
+      enforceAppCheck: process.env.FUNCTIONS_EMULATOR !== "true",
+      maxInstances: 10,
+    },
     async (request) => {
       requireAdmin(request)
       try {

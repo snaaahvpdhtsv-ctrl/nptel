@@ -469,9 +469,16 @@ export async function saveQuestions(
 }
 
 export async function importQuestionOperation(
-  owner: { id: string courseId: string type: "week" | "paper" },
+  owner: {
+    id: string
+    courseId: string
+    type: "week" | "paper"
+  },
   questions: AdminQuestion[],
-  metadata: { sourceType: "csv" | "json" fileName: string },
+  metadata: {
+    sourceType: "csv" | "json"
+    fileName: string
+  },
 ) {
   if (!firebaseFunctions)
     throw new Error("Trusted bulk content service is not configured.")
@@ -481,7 +488,11 @@ export async function importQuestionOperation(
 }
 
 export async function updateQuestionOperation(
-  owner: { id: string courseId: string type: "week" | "paper" },
+  owner: {
+    id: string
+    courseId: string
+    type: "week" | "paper"
+  },
   questionIds: string[],
   patch: Partial<Pick<AdminQuestion, "difficulty" | "topic" | "explanation" | "status">>,
 ) {
@@ -500,7 +511,11 @@ export async function rollbackImportOperation(operationId: string) {
     "rollbackImportOperationContent",
   )
   const result = await callable({ operationId })
-  return result.data as { operationId: string status: "rolled_back" }
+  return result.data as {
+    operationId: string
+    status: "rolled_back" | "rolled_back_with_conflicts"
+    conflicts?: string[]
+  }
 }
 
 export async function importQuestionsWithOperation(
@@ -544,7 +559,7 @@ export async function importQuestionsWithOperation(
   })
   for (const question of questions) {
     const { id, ...data } = question
-    batch.create(
+    batch.set(
       doc(database, "questions", id),
       withoutUndefined({
         ...data,

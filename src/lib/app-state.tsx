@@ -425,7 +425,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const bulkUpdateQuestions = useCallback(
     async (
-      owner: { id: string courseId: string type: "week" | "paper" },
+      owner: {
+        id: string
+        courseId: string
+        type: "week" | "paper"
+      },
       questionIds: string[],
       patch: Partial<Pick<AdminQuestion, "difficulty" | "topic" | "explanation" | "status">>,
     ) => {

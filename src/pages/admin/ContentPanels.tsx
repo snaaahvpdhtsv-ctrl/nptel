@@ -328,6 +328,34 @@ questionText,options,correctAnswer,explanation,difficulty,topic
 Example row:
 "What is emotional regulation?","Managing emotions|Ignoring emotions|Avoiding people|Suppressing all feelings",A,"Managing emotions effectively.",Easy,"Emotional Regulation"`
 
+  const handleJsonFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024)
+      return toast("File too large — maximum 5 MB", "error")
+    if (!/\.json$/i.test(file.name))
+      return toast("Choose a JSON file for question import", "error")
+    try {
+      setJsonPreview(
+        parseQuestionImport(
+          await file.text(),
+          file.name,
+          existing,
+          (row) => `import-${Date.now()}-${row}`,
+        ),
+      )
+      setResult({ fileName: file.name, valid: [], errors: [] })
+    } catch (error) {
+      toast(
+        error instanceof Error
+          ? error.message
+          : "The JSON file could not be read.",
+        "error",
+      )
+    }
+  }
+
   const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ""
@@ -344,33 +372,6 @@ Example row:
         "This CSV file couldn't be read. Check its encoding.",
         "error",
       )
-    }
-
-    const handleJsonFile = async (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0]
-      event.target.value = ""
-      if (!file) return
-      if (file.size > 5 * 1024 * 1024)
-        return toast("File too large — maximum 5 MB", "error")
-      if (!/\.json$/i.test(file.name))
-        return toast("Choose a JSON file for question import", "error")
-      try {
-        setJsonPreview(
-          parseQuestionImport(
-            await file.text(),
-            file.name,
-            existing,
-            (row) => `import-${Date.now()}-${row}`,
-          ),
-        )
-      } catch (error) {
-        toast(
-          error instanceof Error
-            ? error.message
-            : "The JSON file could not be read.",
-          "error",
-        )
-      }
     }
     if (rows.length < 2) return toast("No rows found in file", "error")
     if (rows.length - 1 > 450)
@@ -609,7 +610,7 @@ Example row:
             {new Set(result.errors.map((error) => error.row)).size} rejected.
             Review before writing.
           </p>
-          {result.errors.length > 0 && (
+          {(result.errors.length > 0 || jsonPreview) && (
             <div className="space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-semibold text-red-700 dark:text-red-300">
@@ -707,7 +708,7 @@ Example row:
                                       "Missing question text"}
                                   </p>
                                   <p className="mt-1 text-gray-500">
-                                    {row.question.options.join(" · ")}
+                                    {(row.question.options ?? []).join(" · ")}
                                   </p>
                                 </td>
                                 <td className="whitespace-nowrap px-2 py-2">
@@ -755,6 +756,7 @@ Example row:
                           .map((row) => row.question)
                         await onImport(valid, "json", jsonPreview.fileName)
                         setJsonPreview(null)
+                        setResult(null)
                       }}
                     >
                       Import valid JSON rows
@@ -1213,7 +1215,11 @@ export function QuestionList({
                             `${labels[action]} (${selected.length})`,
                             ownerLabel,
                           )
-                          toast(`${selected.length} questions updated`)
+                          toast(
+                            `${selected.length} ${
+                              selected.length === 1 ? "question" : "questions"
+                            } updated`,
+                          )
                           setSelectedIds(new Set())
                         } catch (error) {
                           toast(

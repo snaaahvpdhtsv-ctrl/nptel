@@ -74,6 +74,23 @@ function clean(value) {
   )
 }
 
+function comparable(value) {
+  if (Array.isArray(value)) return value.map(comparable)
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== "bulkOperationId")
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, field]) => [key, comparable(field)]),
+    )
+  }
+  return value
+}
+
+function sameContent(left, right) {
+  return JSON.stringify(comparable(left)) === JSON.stringify(comparable(right))
+}
+
 function contentReady(status) {
   return status === "published"
 }
@@ -308,6 +325,10 @@ export async function saveQuestionsWithOperation(
       retryable: 0,
       status: "completed",
       questionIds: entries.map((entry) => entry.id),
+      createdSnapshots: entries.map((entry) => ({
+        questionId: entry.id,
+        data: entry.data,
+      })),
       results: entries.map((entry) => ({
         row: entry.row,
         questionId: entry.id,
@@ -329,23 +350,45 @@ export async function rollbackImportOperation(db, operationId) {
       throw new Error("The bulk operation no longer exists.")
     if (operation.get("type") !== "import")
       throw new Error("Only import operations can be rolled back.")
-    if (operation.get("status") === "rolled_back") return
+    if (
+      operation.get("status") === "rolled_back" ||
+      operation.get("status") === "rolled_back_with_conflicts"
+    )
+      return
     const questionIds = operation.get("questionIds") ?? []
+    const snapshots = new Map(
+      (operation.get("createdSnapshots") ?? []).map((item) => [
+        item.questionId,
+        item.data,
+      ]),
+    )
     const questions = await Promise.all(
       questionIds.map((id) =>
         transaction.get(db.collection("questions").doc(id)),
       ),
     )
+    const conflicts = []
     questions.forEach((question) => {
-      if (question.exists && question.get("bulkOperationId") === operationId)
-        transaction.delete(question.ref)
+      if (!question.exists || question.get("bulkOperationId") !== operationId)
+        return
+      if (!sameContent(question.data(), snapshots.get(question.id))) {
+        conflicts.push(question.id)
+        return
+      }
+      transaction.delete(question.ref)
     })
     transaction.update(operationRef, {
-      status: "rolled_back",
+      status: conflicts.length ? "rolled_back_with_conflicts" : "rolled_back",
+      conflicts,
       rolledBackAt: new Date().toISOString(),
     })
   })
-  return { operationId, status: "rolled_back" }
+  const updated = await operationRef.get()
+  return {
+    operationId,
+    status: updated.get("status"),
+    conflicts: updated.get("conflicts") ?? [],
+  }
 }
 
 export async function updateQuestionsWithOperation(

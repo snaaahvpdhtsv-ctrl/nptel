@@ -50,7 +50,7 @@ remain outside scope. The detailed findings are in
 | Auth flows | Sign-in UI | Dedicated E2E unavailable | Source only | Claim rules | UI only | BLOCKED |
 | Admin dashboard | Authenticated E2E | Course/week CRUD and guard | Emulator writes | Claim rules | Not full | VERIFIED |
 | Content quality dashboard | Yes | Diagnostics 6/6; admin E2E; accessibility; 100/500/1000 browser benchmark | Emulator-backed admin snapshots; 11 observed emulator requests | Claim-only access and signed-out guard | 390px rendered audit | VERIFIED |
-| Bulk content management | JSON/CSV preview, selection, operation history UI | Parser 3/3; content service 3/3; rules 12/12 | Trusted callable service and admin-only operation records | Parent ownership, draft isolation, operation write denial | Source only | PARTIALLY VERIFIED |
+| Bulk content management | JSON/CSV preview, selection, operation history UI | Parser 3/3; callable 1/1; browser callable workflow; content service 3/3; rules 12/12 | Trusted callable service and admin-only operation records | Parent ownership, draft isolation, operation write denial | Publication visibility and multi-batch retry journeys pending | PARTIALLY VERIFIED |
 
 ## Defects and gaps
 
