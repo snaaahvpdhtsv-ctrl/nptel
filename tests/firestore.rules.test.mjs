@@ -8,11 +8,13 @@ import {
 } from "@firebase/rules-unit-testing"
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
   query,
   setDoc,
+  updateDoc,
   where,
 } from "firebase/firestore"
 
@@ -578,6 +580,34 @@ test("users can read only their own feedback and cannot moderate it", async () =
       message: "My feedback.",
       createdAt: "2025-01-01T10:00:00.000Z",
       ownerId: "learner-1",
+    })
+
+    test("audit logs are admin-readable, append-only, and actor-bound", async () => {
+      const admin = testEnv
+        .authenticatedContext("admin-audit", { admin: true })
+        .firestore()
+      const learner = testEnv.authenticatedContext("learner-audit").firestore()
+      const entry = doc(admin, "auditLogs", "entry-1")
+      const data = {
+        action: "Question published",
+        resource: "Course · Week 1",
+        actorId: "admin-audit",
+        actorEmail: "admin@example.com",
+        createdAt: new Date().toISOString(),
+        outcome: "success",
+      }
+
+      await assertSucceeds(setDoc(entry, data))
+      await assertSucceeds(getDoc(entry))
+      await assertFails(getDoc(doc(learner, "auditLogs", "entry-1")))
+      await assertFails(
+        setDoc(doc(learner, "auditLogs", "entry-2"), {
+          ...data,
+          actorId: "learner-audit",
+        }),
+      )
+      await assertFails(updateDoc(entry, { action: "Changed" }))
+      await assertFails(deleteDoc(entry))
     })
   })
 

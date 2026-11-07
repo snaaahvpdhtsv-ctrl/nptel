@@ -17,6 +17,7 @@ import {
 import { StatusBadge } from "../../components/common"
 import { useApp } from "../../lib/app-context"
 import { useAuth } from "../../lib/auth-context"
+import { subscribeToAudit, writeAudit } from "../../lib/cloud-audit"
 import { coursePath } from "../../lib/course-context"
 import type { Course } from "../../lib/data"
 import { useMediaQuery, WIDE_QUERY } from "../../lib/use-media-query"
@@ -196,7 +197,7 @@ function CourseSwitcher({
 export default function AdminPage() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const { signOut } = useAuth()
+  const { signOut, user } = useAuth()
   const {
     contentLoading,
     contentError,
@@ -210,10 +211,28 @@ export default function AdminPage() {
   const wide = useMediaQuery(WIDE_QUERY)
   const [confirm, setConfirm] = useState<ConfirmState>(null)
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
+  const [auditLoading, setAuditLoading] = useState(true)
+  const [auditError, setAuditError] = useState<string | null>(null)
+  const [auditRetry, setAuditRetry] = useState(0)
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null)
   const weeksTop = useRef<HTMLDivElement>(null)
   const questionsTop = useRef<HTMLDivElement>(null)
   const revealQuestions = useRef(false)
+
+  useEffect(() => {
+    setAuditLoading(true)
+    setAuditError(null)
+    return subscribeToAudit(
+      (entries) => {
+        setAuditLog(entries)
+        setAuditLoading(false)
+      },
+      (error) => {
+        setAuditError(error.message)
+        setAuditLoading(false)
+      },
+    )
+  }, [auditRetry])
 
   // `?course=` picks the course being managed; default to the first one.
   const course =
@@ -288,12 +307,26 @@ export default function AdminPage() {
     selectWeek(weekId)
   }
 
-  const audit = useCallback((action: string, resource = "Content") => {
-    setAuditLog((current) => [
-      { id: Date.now() + Math.random(), action, resource, at: new Date() },
-      ...current,
-    ])
-  }, [])
+  const audit = useCallback(
+    (action: string, resource = "Content") => {
+      const entry = {
+        id: `local-${Date.now()}-${Math.random()}`,
+        action,
+        resource,
+        at: new Date(),
+      }
+      setAuditLog((current) => [entry, ...current])
+      if (!user) return
+      void writeAudit(action, resource, user.id, user.email).catch((error) => {
+        setAuditError(
+          error instanceof Error
+            ? error.message
+            : "The audit entry could not be saved.",
+        )
+      })
+    },
+    [user],
+  )
 
   // Week, question, paper and health entries name the course they belong to.
   const courseAudit = useCallback(
@@ -581,7 +614,12 @@ export default function AdminPage() {
                 description="Who changed what, when, and through which operation."
                 scope={siteScope}
               />
-              <AuditPanel entries={auditLog} />
+              <AuditPanel
+                entries={auditLog}
+                loading={auditLoading}
+                error={auditError}
+                onRetry={() => setAuditRetry((value) => value + 1)}
+              />
             </section>
           </div>
         </div>

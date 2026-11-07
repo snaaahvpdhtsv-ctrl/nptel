@@ -290,6 +290,29 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    match /auditLogs/{entryId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly([
+          "action", "resource", "actorId", "actorEmail", "createdAt", "outcome"
+        ])
+        && request.resource.data.action is string
+        && request.resource.data.action.size() > 0
+        && request.resource.data.action.size() <= 200
+        && request.resource.data.resource is string
+        && request.resource.data.resource.size() > 0
+        && request.resource.data.resource.size() <= 200
+        && request.resource.data.actorId == request.auth.uid
+        && (!("actorEmail" in request.resource.data)
+          || request.resource.data.actorEmail == null
+          || (request.resource.data.actorEmail is string
+            && request.resource.data.actorEmail.size() <= 320))
+        && request.resource.data.createdAt is string
+        && request.resource.data.createdAt.size() <= 100
+        && request.resource.data.outcome == "success";
+      allow update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

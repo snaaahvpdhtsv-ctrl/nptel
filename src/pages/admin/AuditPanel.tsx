@@ -3,14 +3,23 @@ import { Search } from "lucide-react"
 import { csvCell, downloadFile, Panel, smallOutline } from "./ui"
 
 export interface AuditEntry {
-  id: number
+  id: number | string
   action: string
   resource: string
   at: Date
 }
 
-export function AuditPanel({ entries }: { entries: AuditEntry[] }) {
-  const [state, setState] = useState<"idle" | "loading" | "loaded">("idle")
+export function AuditPanel({
+  entries,
+  loading,
+  error,
+  onRetry,
+}: {
+  entries: AuditEntry[]
+  loading: boolean
+  error: string | null
+  onRetry: () => void
+}) {
   const [query, setQuery] = useState("")
   const term = query.trim().toLowerCase()
   const visible = entries.filter(
@@ -20,37 +29,33 @@ export function AuditPanel({ entries }: { entries: AuditEntry[] }) {
 
   return (
     <Panel>
-      <div
-        className={`flex flex-wrap items-center justify-between gap-3 ${
-          state === "loaded" ? "mb-4" : ""
-        }`}
-      >
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {state === "loaded"
-            ? `${entries.length} ${
+          {loading
+            ? "Loading recent admin changes…"
+            : `${entries.length} ${
                 entries.length === 1 ? "entry" : "entries"
-              } from this browser session`
-            : "Load the history to review changes made in this browser session."}
+              } from Firestore`}
         </p>
-        <button
-          onClick={() => {
-            setState("loading")
-            window.setTimeout(() => setState("loaded"), 450)
-          }}
-          disabled={state === "loading"}
-          className={smallOutline}
-        >
-          {state === "loading"
-            ? "Loading…"
-            : state === "loaded"
-              ? "Refresh"
-              : "Load history"}
+        <button onClick={onRetry} disabled={loading} className={smallOutline}>
+          {loading ? "Loading…" : "Refresh"}
         </button>
       </div>
-      {state === "loaded" &&
+      {error && (
+        <div
+          role="alert"
+          className="mb-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
+        >
+          <p>{error}</p>
+          <button type="button" onClick={onRetry} className="mt-2 underline">
+            Try again
+          </button>
+        </div>
+      )}
+      {!loading &&
         (entries.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            No audit entries yet. Admin actions will appear here.
+            No audit entries yet. Successful admin actions will appear here.
           </p>
         ) : (
           <>
@@ -76,7 +81,7 @@ export function AuditPanel({ entries }: { entries: AuditEntry[] }) {
                       ["time", "admin", "action", "resource"],
                       ...entries.map((entry) => [
                         entry.at.toISOString(),
-                        "Owner",
+                        "Admin",
                         entry.action,
                         entry.resource,
                       ]),
@@ -93,8 +98,7 @@ export function AuditPanel({ entries }: { entries: AuditEntry[] }) {
             </div>
             {visible.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                No audit entries match these filters. Try clearing one or more
-                filters.
+                No audit entries match this search. Try a different term.
               </p>
             ) : (
               <ul className="space-y-2">
@@ -113,11 +117,7 @@ export function AuditPanel({ entries }: { entries: AuditEntry[] }) {
                       {entry.resource}
                     </span>
                     <span className="ml-auto text-xs text-gray-500">
-                      Owner ·{" "}
-                      {entry.at.toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {entry.at.toLocaleString()}
                     </span>
                   </li>
                 ))}
