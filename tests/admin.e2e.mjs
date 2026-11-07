@@ -7,6 +7,7 @@ import { chromium } from "playwright"
 const require = createRequire(import.meta.url)
 const { getApps, initializeApp } = require("firebase-admin/app")
 const { getAuth } = require("firebase-admin/auth")
+const { getFirestore } = require("firebase-admin/firestore")
 
 const env = {
   ...process.env,
@@ -21,8 +22,7 @@ process.env.FIRESTORE_EMULATOR_HOST = env.FIRESTORE_EMULATOR_HOST
 process.env.GCLOUD_PROJECT = env.VITE_FIREBASE_PROJECT_ID
 process.env.GOOGLE_CLOUD_PROJECT = env.VITE_FIREBASE_PROJECT_ID
 
-const start = (command, args) =>
-  spawn(command, args, { env, stdio: "ignore" })
+const start = (command, args) => spawn(command, args, { env, stdio: "ignore" })
 
 const waitFor = async (url) => {
   for (let attempt = 0; attempt < 60; attempt += 1) {
@@ -56,6 +56,7 @@ try {
     ? getApps()[0]
     : initializeApp({ projectId: "demo-nptel" })
   const auth = getAuth(adminApp)
+  const database = getFirestore(adminApp)
   const email = "qa-admin@example.test"
   const password = "Qa-admin-12345"
   let user
@@ -74,17 +75,58 @@ try {
   await page.getByRole("button", { name: /sign in to dashboard/i }).click()
   await page.waitForURL(/\/admin\/dashboard/)
   await page.getByRole("button", { name: /^Courses/ }).click()
-  await page.getByRole("button", { name: /^Add Course$/ }).first().click()
+  await page
+    .getByRole("button", { name: /^Add Course$/ })
+    .first()
+    .click()
   await page.getByLabel("Course title").fill("E2E Course")
-  await page.locator("form").getByRole("button", { name: /^Add course$/i }).click()
+  await page
+    .locator("form")
+    .getByRole("button", { name: /^Add course$/i })
+    .click()
   await page.waitForTimeout(500)
-  await assert.ok((await page.getByText("E2E Course", { exact: true }).count()) > 0)
+  await assert.ok(
+    (await page.getByText("E2E Course", { exact: true }).count()) > 0,
+  )
   await page.getByRole("button", { name: /^Weeks/ }).click()
-  await page.getByRole("button", { name: /^Add Week$/ }).first().click()
+  await page
+    .getByRole("button", { name: /^Add Week$/ })
+    .first()
+    .click()
   await page.getByLabel("Week title").fill("E2E Week")
-  await page.locator("form").getByRole("button", { name: /^Add Week$/i }).click()
+  await page
+    .locator("form")
+    .getByRole("button", { name: /^Add Week$/i })
+    .click()
   await page.waitForTimeout(500)
-  await assert.ok((await page.getByText("E2E Week", { exact: true }).count()) > 0)
+  await assert.ok(
+    (await page.getByText("E2E Week", { exact: true }).count()) > 0,
+  )
+  await database.collection("feedback").doc("e2e-feedback").set({
+    courseId: "e2e-course",
+    type: "feedback",
+    status: "pending",
+    message: "Admin can reply to this feedback",
+    createdAt: new Date().toISOString(),
+    age: "0h old",
+    ownerId: "e2e-learner",
+  })
+  await page.getByRole("button", { name: /Requests & feedback/i }).click()
+  const requestCard = page
+    .locator("article")
+    .filter({ hasText: "Admin can reply to this feedback" })
+  await requestCard.waitFor()
+  await requestCard
+    .getByRole("textbox", { name: /Reply to Admin can reply/i })
+    .fill("Thanks for the feedback")
+  await requestCard.getByRole("button", { name: "Reply", exact: true }).click()
+  await requestCard.getByText("Replied", { exact: true }).waitFor()
+  const savedFeedback = await database
+    .collection("feedback")
+    .doc("e2e-feedback")
+    .get()
+  assert.equal(savedFeedback.data().status, "replied")
+  assert.equal(savedFeedback.data().reply, "Thanks for the feedback")
   await page.getByText("Log out", { exact: true }).click()
   await page.goto("http://127.0.0.1:4174/admin/dashboard")
   await page.waitForURL(/\/signin\?view=admin/)

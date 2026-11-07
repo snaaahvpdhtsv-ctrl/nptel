@@ -136,7 +136,6 @@ function RequestCard({
   onOpenWeek?: () => void
 }) {
   const { updateRequest, deleteRequest, toast } = useApp()
-  const [note, setNote] = useState("")
   const [reply, setReply] = useState("")
   const [assigned, setAssigned] = useState(false)
   const type = requestTypeMeta[item.type]
@@ -147,11 +146,13 @@ function RequestCard({
   const update = async (patch: Partial<RequestItem>) => {
     try {
       await updateRequest({ ...item, ...patch })
+      return true
     } catch (error) {
       toast(
         error instanceof Error ? error.message : "Request could not be updated",
         "error",
       )
+      return false
     }
   }
   const remove = () =>
@@ -200,39 +201,22 @@ function RequestCard({
       )}
       <div className="mt-2 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
         {assigned ? (
-          "Assigned to you"
+          "Assigned to you for this session"
         ) : (
           <>
             Unassigned
             <button
+              type="button"
               onClick={() => {
                 setAssigned(true)
-                toast("Request assigned to you")
+                toast("Request assigned to you for this session")
               }}
               className="btn-outline rounded-lg px-2 py-1 text-xs"
             >
-              Assign to me
+              Assign for this session
             </button>
           </>
         )}
-      </div>
-      <div className="mt-3 flex gap-2">
-        <input
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          aria-label={`Internal note for ${summary}`}
-          placeholder="Internal note (not shown to learner)"
-          className="input py-2"
-        />
-        <button
-          onClick={() => {
-            audit("Internal note saved")
-            toast("Internal note saved")
-          }}
-          className={`${smallOutline} shrink-0`}
-        >
-          Save note
-        </button>
       </div>
 
       {item.status === "replied" && item.reply && (
@@ -301,18 +285,23 @@ function RequestCard({
           />
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => {
+              type="button"
+              onClick={async () => {
                 if (!reply.trim()) return toast("Please enter a reply", "error")
-                update({
-                  status: "replied",
-                  reply: reply.trim(),
-                  replyAt: new Date().toLocaleDateString(undefined, {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  }),
-                  replyVisible: true,
-                })
+                if (
+                  !(await update({
+                    status: "replied",
+                    reply: reply.trim(),
+                    replyAt: new Date().toLocaleDateString(undefined, {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    }),
+                    replyVisible: true,
+                  }))
+                ) {
+                  return
+                }
                 audit("Reply published")
                 toast("Reply published")
               }}
@@ -322,8 +311,9 @@ function RequestCard({
               Reply
             </button>
             <button
-              onClick={() => {
-                update({ status: "invalid" })
+              type="button"
+              onClick={async () => {
+                if (!(await update({ status: "invalid" }))) return
                 audit("Marked as invalid")
                 toast("Marked as invalid")
               }}

@@ -19,7 +19,9 @@ or destructive operations were performed.
 
 The six defects from audit commit `1131f3f` were remediated with emulator-backed
 and Playwright evidence. A further optional-field serialization defect found
-during browser verification was fixed in the shared request writer.
+during browser verification was fixed in the shared request writer. Regression
+testing also fixed duplicate learner rendering and false-success admin
+moderation feedback in Requests & Feedback.
 
 ## Feature matrix
 
@@ -30,7 +32,7 @@ during browser verification was fixed in the shared request writer.
 | Practice quiz/scoring | Yes | Full quiz | Local progress | Attempt rules | Yes | PASSED |
 | Saved questions | Yes | Bookmark/saved page | Local + source path | Ownership | Yes | PARTIALLY VERIFIED |
 | History/progress | Yes | Attempt/refresh | Local + source path | Ownership | Yes | PARTIALLY VERIFIED |
-| Feedback/requests | Yes | Submit/reload E2E | Firestore write/read | Owner isolation | Yes | VERIFIED |
+| Feedback/requests | Yes | Submit/reload and admin reply E2E | Firestore write/read/update | Owner isolation and admin moderation | Yes | VERIFIED |
 | PYQ answers | Yes | Published paper question | Read path | Published rules | Yes | PASSED |
 | PYQ interactive practice | Yes | Interactive learner E2E | Existing question bank | Published rules | Yes | VERIFIED |
 | CSV validation/import | Source/UI | Service tests | Emulator service | Admin/draft/atomic | Source only | PARTIALLY VERIFIED |

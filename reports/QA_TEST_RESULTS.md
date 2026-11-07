@@ -22,6 +22,8 @@
 | REG-004 | Formatting | Local | Changed files formatted | Changed source and E2E files formatted | PASS | `npx oxfmt src/lib/cloud-requests.ts tests/learner.e2e.mjs` |
 | E2E-001 | Authenticated admin | Emulator admin account | CRUD, authorization and protected route behavior | Course/week CRUD passed; signed-out admin route redirected | PASS | `npm run test:e2e:admin` |
 | E2E-002 | Learner PYQ/feedback | Emulator learner account | Interactive PYQ and durable feedback | Correct answer feedback, Firestore persistence and reload passed | PASS | `npm run test:e2e:learner` |
+| E2E-003 | Requests moderation | Emulator admin account and seeded feedback | Reply persists and status changes only after write | Admin reply persisted with `status=replied` and reply text | PASS | `npm run test:e2e:admin` |
+| E2E-004 | Duplicate feedback rendering | Emulator learner account | One submission card per Firestore record | Exactly one feedback card before and after reload | PASS | `npm run test:e2e:learner` |
 
 ## Blocked or unavailable
 

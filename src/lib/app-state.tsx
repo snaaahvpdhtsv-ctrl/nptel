@@ -209,7 +209,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const createRequest = useCallback(
     async (request: RequestItem) => {
       await createCloudRequest(request, user?.id)
-      setRequests((current) => [request, ...current])
     },
     [user?.id],
   )

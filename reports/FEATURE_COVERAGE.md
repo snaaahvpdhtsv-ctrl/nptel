@@ -7,7 +7,7 @@
 | Practice quiz/scoring | Yes | Yes | Progress rules | Yes | Yes | PASSED |
 | Saved questions | Yes | Yes | Progress rules | Ownership | Yes | PARTIALLY VERIFIED |
 | History/progress | Yes | Yes | Progress rules | Ownership | Yes | PARTIALLY VERIFIED |
-| Feedback/requests | Yes | Learner E2E submit/reload | Firestore write/read | Owner isolation | Yes | VERIFIED |
+| Feedback/requests | Yes | Learner submit/reload; admin reply | Firestore write/read/update | Owner isolation and admin moderation | Yes | VERIFIED |
 | PYQ listing/answers | Yes | Published paper data | Published reads | Published rules | Yes | PASSED |
 | PYQ interactive practice | Yes | Learner E2E completion | Existing question bank | Published reads | Yes | VERIFIED |
 | Accessibility controls | Yes | Toggle/persistence checks | N/A | N/A | Yes | PARTIALLY VERIFIED |

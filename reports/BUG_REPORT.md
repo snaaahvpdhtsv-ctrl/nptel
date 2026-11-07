@@ -22,6 +22,23 @@ feedback with an empty optional contact field before persistence. The shared
 request writer now recursively removes undefined values for create and update
 operations. The learner E2E test covers the empty-contact case.
 
+## Requests & Feedback regression defects
+
+**Duplicate learner card during submission.** The context inserted a temporary
+request immediately after `addDoc`, while the Firestore listener inserted the
+same request with its server ID. The optimistic insert was removed; the UI now
+waits for the authoritative listener snapshot. Learner E2E asserts exactly one
+visible submission before and after reload.
+
+**False admin moderation success.** Reply and invalid actions did not await the
+Firestore update and showed success/audit feedback even when persistence
+failed. The actions now await the update result and only show success after a
+successful write. Admin E2E verifies the reply status and body in Firestore.
+
+**Misleading internal-note control.** The panel exposed a “Save note” action
+without a persistence path. The dead control was removed; assignment wording
+now explicitly identifies the remaining assignment as session-only.
+
 ## Remaining limitations
 
 The repository does not define an axe, component-test, Functions-emulator, or

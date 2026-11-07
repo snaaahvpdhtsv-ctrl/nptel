@@ -126,6 +126,10 @@ try {
       exact: true,
     })
     .waitFor()
+  await assert.equal(
+    await page.getByText("Persist this feedback", { exact: true }).count(),
+    1,
+  )
   await page.reload()
   await page.getByText("Persist this feedback", { exact: true }).waitFor()
 
