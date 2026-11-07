@@ -69,6 +69,9 @@ importers:
 
 packages:
 
+  axe-core@4.14.0:
+    resolution: {integrity: sha512-9WTZxEjsZ7b13TH8JPmbV2z8CHbl80/2hm3XPEG4JgNdQLK81IBRXmSxHfMAOkSqQeRxT/0dwNDz2GOm3zzpcQ==}
+
   '@emnapi/core@1.9.1':
     resolution: {integrity: sha512-mukuNALVsoix/w1BJwFzwXBN/dHeejQtuVzcDsfOEsdpCumXb/E9j8w11h5S54tT1xhifGfbbSm/ICrObRb3KA==}
 
@@ -1473,6 +1476,8 @@ packages:
     engines: {node: '>=10'}
 
 snapshots:
+
+  axe-core@4.14.0: {}
 
   '@emnapi/core@1.9.1':
     dependencies:

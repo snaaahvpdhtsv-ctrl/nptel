@@ -22,10 +22,11 @@ and Playwright evidence. A further optional-field serialization defect found
 during browser verification was fixed in the shared request writer. Regression
 testing also fixed duplicate learner rendering and false-success admin
 moderation feedback in Requests & Feedback. The first planned expansion slice, the admin content-quality dashboard, is
-implemented and independently tested. Its current status is **PARTIALLY
-VERIFIED**: core diagnostics, calculations, filters, access control, and
-responsive rendering pass, while dedicated axe and large-browser performance
-coverage remain unavailable. The detailed findings are in
+implemented and independently tested. Its tested local status is **VERIFIED**:
+core diagnostics, calculations, filters, access control, responsive rendering,
+axe accessibility, keyboard navigation, and 1,000-record browser performance
+coverage pass. Manual screen-reader/zoom checks and production verification
+remain outside scope. The detailed findings are in
 `reports/CONTENT_QUALITY_DASHBOARD_QA.md`.
 
 ## Feature matrix
@@ -48,7 +49,7 @@ coverage remain unavailable. The detailed findings are in
 | Offline progress queue | Source/UI | Duplicate/conflict handling | Emulator progress | Ownership | Source only | VERIFIED |
 | Auth flows | Sign-in UI | Dedicated E2E unavailable | Source only | Claim rules | UI only | BLOCKED |
 | Admin dashboard | Authenticated E2E | Course/week CRUD and guard | Emulator writes | Claim rules | Not full | VERIFIED |
-| Content quality dashboard | Yes | 6/6 diagnostic tests; admin filter/deep-link E2E | Emulator-backed admin snapshots | Claim-only access and signed-out guard | 390px rendered audit | PARTIALLY VERIFIED |
+| Content quality dashboard | Yes | Diagnostics 6/6; admin E2E; accessibility; 100/500/1000 browser benchmark | Emulator-backed admin snapshots; 11 observed emulator requests | Claim-only access and signed-out guard | 390px rendered audit | VERIFIED |
 
 ## Defects and gaps
 
@@ -75,6 +76,8 @@ remaining test-infrastructure limitations are recorded in
 | Feedback persistence | PASS — learner E2E and owner query |
 | Responsive matrix | PASS for sampled routes and 9 viewports |
 | Console/network smoke | PASS for tested local routes |
+| `npm run test:accessibility` | PASS — 23 axe rules, 0 violations; keyboard/focus/mobile checks |
+| `npm run test:performance` | PASS — 100, 500, and 1,000 record browser runs; complete dataset and timing output |
 
 ## Firebase and production boundary
 

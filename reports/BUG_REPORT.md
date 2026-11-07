@@ -50,8 +50,10 @@ omitted IDs/parent metadata, and narrow finding rows cramped their details.
 Regression coverage is in `tests/content-quality.test.mjs`; browser coverage is
 in `tests/admin.e2e.mjs`.
 
-The feature remains **PARTIALLY VERIFIED** because no axe runner or
-large-dataset browser performance suite exists in the repository. See
+The feature is now **VERIFIED for the tested local scope**. Axe reported zero
+violations across 23 WCAG 2A/2AA rules, and the browser benchmark covered 100,
+500, and 1,000 records. Manual screen-reader/zoom checks and production
+verification remain outside scope. See
 `reports/CONTENT_QUALITY_DASHBOARD_QA.md`.
 
 The repository does not define an axe, component-test, Functions-emulator, or

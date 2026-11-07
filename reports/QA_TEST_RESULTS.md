@@ -29,6 +29,8 @@
 | ADMIN-QUALITY-003 | Quality filters/search | Authenticated admin with seeded findings | Filter by severity/category, search question ID, clear filters | ID search and clear-filter flow passed | PASS | `npm run test:e2e:admin` |
 | ADMIN-QUALITY-004 | Quality deep link/access | Authenticated admin then signed out | Open owning content and deny signed-out dashboard access | URL entered `section=weeks`; signed-out route redirected to admin sign-in | PASS | `npm run test:e2e:admin` |
 | ADMIN-QUALITY-005 | Quality responsive render | Emulator admin at 1440×900 and 390×844 | No console/page errors; finding content remains usable | No console/page errors; mobile finding layout fixed and rechecked | PASS | Rendered Playwright audit |
+| ADMIN-QUALITY-006 | Quality accessibility | Emulator admin dashboard | Axe WCAG 2A/2AA, keyboard focus, labels, mobile overflow | 23 axe rules passed with 0 violations; keyboard and mobile checks passed | PASS | `npm run test:accessibility` |
+| ADMIN-QUALITY-007 | Quality browser performance | Emulator admin with 100/500/1,000 questions | Full dataset, search/filter, scroll, memory and read-volume measurements | All datasets complete; 11 emulator requests; 1,000-record run measured 356.58 ms initial, 222.49 ms search, 4.80 ms filter | PASS | `npm run test:performance` |
 
 ## Blocked or unavailable
 

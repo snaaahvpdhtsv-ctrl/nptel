@@ -11,6 +11,8 @@
     "test:rules": "firebase emulators:exec --only firestore --project demo-nptel \"node --test tests/firestore.rules.test.mjs\"",
     "test:content-service": "firebase emulators:exec --only firestore --project demo-nptel \"node --test tests/content-service.test.mjs\"",
     "test:content-quality": "node --experimental-strip-types --test tests/content-quality.test.mjs",
+    "test:accessibility": "node tests/accessibility.e2e.mjs",
+    "test:performance": "node tests/performance.e2e.mjs",
     "test:e2e:admin": "node tests/admin.e2e.mjs",
     "test:e2e:learner": "node tests/learner.e2e.mjs"
   },
@@ -31,6 +33,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.0.0",
+    "axe-core": "^4.14.0",
     "firebase-admin": "^14.5.0",
     "oxfmt": "^0.2.0",
     "tailwindcss": "^4.0.0",

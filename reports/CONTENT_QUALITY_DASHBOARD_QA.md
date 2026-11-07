@@ -7,11 +7,11 @@
 
 ## Verdict
 
-**PARTIALLY VERIFIED.** Core diagnostics, calculations, filters, search,
-deep-link navigation, custom-claim access, learner isolation, empty states,
-and responsive rendering were exercised. Dedicated axe testing and a
-large-dataset browser-render measurement are unavailable because the
-repository has no axe or browser performance test runner.
+**VERIFIED for the tested local scope.** Core diagnostics, calculations,
+filters, search, deep-link navigation, custom-claim access, learner isolation,
+empty states, responsive rendering, axe accessibility, keyboard navigation,
+and large-dataset browser behavior were exercised. Production behavior remains
+outside scope.
 
 ## Expected behaviour
 
@@ -46,6 +46,43 @@ repository has no axe or browser performance test runner.
 Evidence: `npm run test:content-quality` — **6/6 passed**, including a
 1,000-question pure diagnostic run. The run measured `buildQualityReport`
 without applying an arbitrary pass/fail performance threshold.
+
+## Accessibility verification
+
+| Check | Result | Evidence |
+|---|---|---|
+| Axe WCAG 2A/2AA scan | VERIFIED — 0 violations across 23 rules | `npm run test:accessibility` |
+| Keyboard-only tab walk | VERIFIED — search control reachable; focus outline observed | `npm run test:accessibility` |
+| Accessible names/labels | VERIFIED by axe and labelled Playwright controls | `npm run test:accessibility` |
+| Heading/landmark structure | VERIFIED by axe | `npm run test:accessibility` |
+| Filter result interaction | VERIFIED — search and clear-filter controls operate by keyboard-capable controls | `npm run test:accessibility` |
+| 390px responsive/zoom proxy | VERIFIED — document width remained 390px with no overflow | `npm run test:accessibility` |
+| Console/page errors | VERIFIED — zero captured errors | `npm run test:accessibility` |
+
+No violations were suppressed. The scan used `wcag2a` and `wcag2aa`; manual
+screen-reader output and browser zoom beyond responsive viewport checks were
+not automated.
+
+## Large-dataset browser performance
+
+The isolated Playwright benchmark seeds complete records in Firestore emulator
+batches and exercises the real admin subscription, dashboard rendering,
+question-ID search, warning filtering, and scrolling. It measures elapsed
+browser interaction times without imposing arbitrary thresholds.
+
+| Dataset | Initial dashboard update | Search interaction | Filter interaction | Scroll script |
+|---:|---:|---:|---:|---:|
+| 100 | 51.67 ms | 10.39 ms | 3.84 ms | 0.20 ms |
+| 500 | 115.66 ms | 98.52 ms | 4.56 ms | 0.20 ms |
+| 1,000 | 356.58 ms | 222.49 ms | 4.80 ms | 0.20 ms |
+
+The 1,000-record dataset was complete: all records were loaded into the
+client-side report, all difficulty/quality findings remained visible, and the
+run observed 11 Firestore emulator requests. Chromium reported 86.4 MB `usedJSHeapSize` and 139 MB `totalJSHeapSize` at the end of the run. The
+dashboard currently performs full-dataset client-side calculations; it does not
+paginate quality findings.
+
+Evidence: `npm run test:performance`.
 
 ## UI and journey scenarios
 
@@ -94,11 +131,8 @@ Evidence: `npm run test:rules` — **11/11 passed**.
 
 ## Remaining limitations
 
-- No axe suite exists in the repository; automated accessibility coverage was
-  not re-run for this feature.
-- The 1,000-question check is a pure diagnostic measurement, not a 1,000-row
-  browser render or Firestore listener load test.
+- Manual screen-reader output and browser zoom beyond responsive viewport
+  checks were not automated.
 - Search/filter state is component-local rather than URL-addressable.
 - The dashboard deep link opens the owning week/paper editor, not a specific
   question row.
-
