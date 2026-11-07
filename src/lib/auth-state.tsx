@@ -182,6 +182,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [googleRedirectResult, setGoogleRedirectResult] =
     useState<GoogleRedirectResult | null>(null)
 
+  const refreshAdminClaims = useCallback(async () => {
+    const firebaseUser = firebaseAuth?.currentUser
+    if (!firebaseUser) return false
+    setAdminClaimsLoading(true)
+    try {
+      const token = await getIdTokenResult(firebaseUser, true)
+      const isAdmin = token.claims.admin === true
+      recordAuthDiagnostic("admin.claims.refresh.completed", {
+        adminClaim: isAdmin,
+      })
+      setUser((current) =>
+        current?.id === firebaseUser.uid
+          ? { ...current, role: isAdmin ? "admin" : "learner" }
+          : current,
+      )
+      return isAdmin
+    } catch (error) {
+      recordAuthDiagnostic("admin.claims.refresh.error", {
+        errorCode: errorCode(error) || "unknown",
+      })
+      return false
+    } finally {
+      setAdminClaimsLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     if (!firebaseAuth) {
       recordAuthDiagnostic("auth.initialization.unavailable", {
@@ -542,6 +568,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInWithGoogle,
       acknowledgeGoogleRedirect,
       signInAdmin,
+      refreshAdminClaims,
       signOut,
     }),
     [
@@ -553,6 +580,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUp,
       signInWithGoogle,
       acknowledgeGoogleRedirect,
+      refreshAdminClaims,
       signInAdmin,
       signOut,
     ],

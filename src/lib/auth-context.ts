@@ -64,6 +64,7 @@ export interface AuthState {
   signInWithGoogle: (redirectTo: string) => Promise<GoogleAuthResult>
   acknowledgeGoogleRedirect: () => void
   signInAdmin: (email: string, password: string) => Promise<AuthResult>
+  refreshAdminClaims: () => Promise<boolean>
   signOut: () => Promise<string | null>
 }
 

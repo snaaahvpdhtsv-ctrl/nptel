@@ -204,7 +204,7 @@ function CourseSwitcher({
 export default function AdminPage() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const { signOut, user, adminClaimsLoading } = useAuth()
+  const { signOut, user, adminClaimsLoading, refreshAdminClaims } = useAuth()
   const {
     contentLoading,
     contentError,
@@ -228,6 +228,20 @@ export default function AdminPage() {
   const questionsTop = useRef<HTMLDivElement>(null)
   const revealQuestions = useRef(false)
 
+  const retryAuditHistory = useCallback(async () => {
+    setAuditLoading(true)
+    setAuditError(null)
+    const isAdmin = await refreshAdminClaims()
+    if (!isAdmin) {
+      setAuditLoading(false)
+      setAuditError(
+        "Your admin access is not active in this session. Sign out and sign in again after your admin claim is provisioned.",
+      )
+      return
+    }
+    setAuditRetry((value) => value + 1)
+  }, [refreshAdminClaims])
+
   useEffect(() => {
     if (adminClaimsLoading || user?.role !== "admin") return
     setAuditLoading(true)
@@ -238,7 +252,13 @@ export default function AdminPage() {
         setAuditLoading(false)
       },
       (error) => {
-        setAuditError(error.message)
+        const code =
+          "code" in error ? String((error as { code?: unknown }).code) : ""
+        setAuditError(
+          code === "permission-denied"
+            ? "Your admin access could not be verified. Refresh your session or sign out and sign in again."
+            : error.message,
+        )
         setAuditLoading(false)
       },
     )
@@ -705,7 +725,7 @@ export default function AdminPage() {
                 entries={auditLog}
                 loading={auditLoading}
                 error={auditError}
-                onRetry={() => setAuditRetry((value) => value + 1)}
+                onRetry={() => void retryAuditHistory()}
               />
             </section>
           </div>
