@@ -1355,6 +1355,7 @@ export function WeeksPanel({
   const {
     weeks: allWeeks,
     saveWeek,
+    saveQuestions,
     archiveWeek,
     newContentId,
     adminQuestions,
@@ -1368,6 +1369,14 @@ export function WeeksPanel({
     weekNumber: string
     title: string
     status: Status
+  } | null>(null)
+  const backupInputRef = useRef<HTMLInputElement>(null)
+  const [backupPreview, setBackupPreview] = useState<{
+    fileName: string
+    weeks: Week[]
+    questions: Record<string, AdminQuestion[]>
+    conflicts: string[]
+    error?: string
   } | null>(null)
 
   const submit = async (event: FormEvent) => {
@@ -1427,7 +1436,7 @@ export function WeeksPanel({
                 `nptel-${course.id}-weeks-backup-${new Date().toISOString().slice(0, 10)}.json`,
                 JSON.stringify(
                   {
-                    version: 1,
+                    version: 2,
                     exportedAt: new Date().toISOString(),
                     course: { id: course.id, title: course.title },
                     weeks,
@@ -1446,12 +1455,95 @@ export function WeeksPanel({
             Export backup
           </button>
           <button
-            disabled
-            title="Restore is disabled until full Firestore backup validation is available."
+            onClick={() => backupInputRef.current?.click()}
             className={smallOutline}
           >
-            Restore unavailable
+            Restore JSON backup
           </button>
+          <input
+            ref={backupInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="sr-only"
+            aria-label="Restore JSON backup"
+            onChange={async (event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ""
+              if (!file) return
+              try {
+                const payload = JSON.parse(await file.text()) as {
+                  version?: number
+                  course?: { id?: string }
+                  weeks?: Week[]
+                  questions?: Record<string, AdminQuestion[]>
+                }
+                if (
+                  payload.version !== 2 ||
+                  payload.course?.id !== course.id ||
+                  !Array.isArray(payload.weeks) ||
+                  !payload.questions ||
+                  payload.weeks.some(
+                    (week) =>
+                      week.courseId !== course.id ||
+                      typeof week.id !== "string" ||
+                      !week.title,
+                  )
+                )
+                  throw new Error(
+                    "This backup is invalid or belongs to another course.",
+                  )
+                const backupQuestions = Object.fromEntries(
+                  Object.entries(payload.questions).map(([weekId, items]) => [
+                    weekId,
+                    Array.isArray(items) ? items : [],
+                  ]),
+                )
+                const existingIds = new Set([
+                  ...weeks.map((week) => week.id),
+                  ...Object.values(adminQuestions)
+                    .flat()
+                    .map((question) => question.id),
+                ])
+                const incomingIds = new Set<string>()
+                const conflicts: string[] = []
+                for (const week of payload.weeks) {
+                  if (existingIds.has(week.id))
+                    conflicts.push(`Week ${week.id}`)
+                  if (incomingIds.has(week.id))
+                    conflicts.push(`Duplicate week ${week.id}`)
+                  incomingIds.add(week.id)
+                }
+                for (const questionsForWeek of Object.values(backupQuestions)) {
+                  for (const question of questionsForWeek) {
+                    if (typeof question.id !== "string")
+                      throw new Error("A backup question is missing its ID.")
+                    if (existingIds.has(question.id))
+                      conflicts.push(`Question ${question.id}`)
+                    if (incomingIds.has(question.id))
+                      conflicts.push(`Duplicate question ${question.id}`)
+                    incomingIds.add(question.id)
+                  }
+                }
+                setBackupPreview({
+                  fileName: file.name,
+                  weeks: payload.weeks,
+                  questions: backupQuestions,
+                  conflicts,
+                })
+              } catch (error) {
+                setBackupPreview({
+                  fileName: file.name,
+                  weeks: [],
+                  questions: {},
+                  conflicts: [],
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "Backup couldn't be read.",
+                })
+              }
+            }}
+          />
           <button
             onClick={() =>
               setForm({
@@ -1621,6 +1713,116 @@ export function WeeksPanel({
           })}
         </div>
       )}
+      <Modal
+        open={backupPreview !== null}
+        title="Review JSON backup"
+        onClose={() => setBackupPreview(null)}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setBackupPreview(null)}
+              className="btn-ghost px-4 py-2 text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={
+                !backupPreview ||
+                Boolean(backupPreview.error) ||
+                backupPreview.conflicts.length > 0 ||
+                backupPreview.weeks.length === 0
+              }
+              onClick={async () => {
+                if (!backupPreview) return
+                try {
+                  for (const week of backupPreview.weeks) {
+                    await saveWeek({
+                      ...week,
+                      status: "draft",
+                      contentReady: false,
+                    })
+                    const questionsForWeek =
+                      backupPreview.questions[week.id] ?? []
+                    if (questionsForWeek.length > 0)
+                      await saveQuestions(
+                        { id: week.id, courseId: course.id, type: "week" },
+                        questionsForWeek.map((question) => ({
+                          ...question,
+                          status: "draft",
+                        })),
+                      )
+                  }
+                  audit(
+                    `Restored ${plural(backupPreview.weeks.length, "week")} as drafts`,
+                    "Weeks",
+                  )
+                  toast(
+                    `Restored ${plural(backupPreview.weeks.length, "week")} as drafts`,
+                  )
+                  setBackupPreview(null)
+                } catch (error) {
+                  toast(
+                    error instanceof Error
+                      ? error.message
+                      : "Backup couldn't be restored.",
+                    "error",
+                  )
+                }
+              }}
+              className={smallPrimary}
+            >
+              Restore as drafts
+            </button>
+          </>
+        }
+      >
+        {backupPreview &&
+          (backupPreview.error ? (
+            <p role="alert" className="text-sm text-red-600 dark:text-red-300">
+              {backupPreview.error}
+            </p>
+          ) : (
+            <div className="space-y-4 text-sm text-gray-700 dark:text-gray-200">
+              <p>
+                <strong>{backupPreview.fileName}</strong> contains{" "}
+                {plural(backupPreview.weeks.length, "week")} and{" "}
+                {plural(
+                  Object.values(backupPreview.questions).flat().length,
+                  "question",
+                )}
+                .
+              </p>
+              <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+                New records will be restored as drafts for review. Existing
+                records are never overwritten.
+              </p>
+              {backupPreview.conflicts.length > 0 && (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-red-300 bg-red-50 p-3 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200"
+                >
+                  <p className="font-semibold">
+                    Restore blocked by{" "}
+                    {plural(backupPreview.conflicts.length, "conflict")}
+                  </p>
+                  <ul className="mt-1 max-h-32 list-disc overflow-y-auto pl-5">
+                    {backupPreview.conflicts.map((conflict) => (
+                      <li key={conflict}>{conflict}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {backupPreview.conflicts.length === 0 && (
+                <p className="rounded-xl border border-green-300 bg-green-50 p-3 text-green-800 dark:border-green-900/60 dark:bg-green-950/30 dark:text-green-200">
+                  No ID conflicts found. You can restore this backup safely as
+                  drafts.
+                </p>
+              )}
+            </div>
+          ))}
+      </Modal>
     </Panel>
   )
 }
