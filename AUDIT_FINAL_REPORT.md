@@ -21,7 +21,8 @@ The six defects from audit commit `1131f3f` were remediated with emulator-backed
 and Playwright evidence. A further optional-field serialization defect found
 during browser verification was fixed in the shared request writer. Regression
 testing also fixed duplicate learner rendering and false-success admin
-moderation feedback in Requests & Feedback.
+moderation feedback in Requests & Feedback. The first planned expansion slice,
+the admin content-quality dashboard, is now implemented and browser-verified.
 
 ## Feature matrix
 

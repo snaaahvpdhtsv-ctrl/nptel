@@ -127,6 +127,44 @@ try {
     .get()
   assert.equal(savedFeedback.data().status, "replied")
   assert.equal(savedFeedback.data().reply, "Thanks for the feedback")
+  await database.collection("courses").doc("quality-course").set({
+    title: "Quality Checks Course",
+    status: "draft",
+    contentReady: false,
+    sample: false,
+  })
+  await database.collection("weeks").doc("quality-week").set({
+    courseId: "quality-course",
+    weekNumber: 1,
+    title: "Quality Checks Week",
+    status: "draft",
+    contentReady: false,
+  })
+  const qualityQuestion = {
+    courseId: "quality-course",
+    weekId: "quality-week",
+    questionText: "Repeated quality question",
+    options: ["One", "Two"],
+    optionCount: 2,
+    correctAnswerIndex: 0,
+    difficulty: "",
+    status: "draft",
+    contentReady: false,
+  }
+  await database
+    .collection("questions")
+    .doc("quality-question-1")
+    .set(qualityQuestion)
+  await database
+    .collection("questions")
+    .doc("quality-question-2")
+    .set(qualityQuestion)
+  await page.getByRole("button", { name: /Content quality/i }).click()
+  await page
+    .getByText("Duplicate question text", { exact: true })
+    .first()
+    .waitFor()
+  await page.getByText("Missing explanation", { exact: true }).first().waitFor()
   await page.getByText("Log out", { exact: true }).click()
   await page.goto("http://127.0.0.1:4174/admin/dashboard")
   await page.waitForURL(/\/signin\?view=admin/)

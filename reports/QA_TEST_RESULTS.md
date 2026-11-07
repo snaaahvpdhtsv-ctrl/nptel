@@ -24,6 +24,7 @@
 | E2E-002 | Learner PYQ/feedback | Emulator learner account | Interactive PYQ and durable feedback | Correct answer feedback, Firestore persistence and reload passed | PASS | `npm run test:e2e:learner` |
 | E2E-003 | Requests moderation | Emulator admin account and seeded feedback | Reply persists and status changes only after write | Admin reply persisted with `status=replied` and reply text | PASS | `npm run test:e2e:admin` |
 | E2E-004 | Duplicate feedback rendering | Emulator learner account | One submission card per Firestore record | Exactly one feedback card before and after reload | PASS | `npm run test:e2e:learner` |
+| ADMIN-QUALITY-001 | Content quality dashboard | Emulator admin with duplicate/incomplete questions | Findings render from Firestore records | Duplicate and missing-explanation findings displayed | PASS | `npm run test:e2e:admin` |
 
 ## Blocked or unavailable
 

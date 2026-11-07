@@ -18,6 +18,7 @@ import { StatusBadge } from "../../components/common"
 import { useApp } from "../../lib/app-context"
 import { useAuth } from "../../lib/auth-context"
 import { subscribeToAudit, writeAudit } from "../../lib/cloud-audit"
+import { buildQualityReport } from "../../lib/content-quality"
 import { coursePath } from "../../lib/course-context"
 import type { Course } from "../../lib/data"
 import { useMediaQuery, WIDE_QUERY } from "../../lib/use-media-query"
@@ -35,6 +36,7 @@ import { AuditPanel, type AuditEntry } from "./AuditPanel"
 import { PapersPanel, QuestionList, WeeksPanel } from "./ContentPanels"
 import { CoursesPanel } from "./CoursesPanel"
 import { OverviewSection } from "./OverviewSection"
+import { QualityPanel } from "./QualityPanel"
 import { RequestsPanel } from "./RequestsPanel"
 import {
   ConfirmDialog,
@@ -205,6 +207,7 @@ export default function AdminPage() {
     weeks: allWeeks,
     papers: allPapers,
     requests,
+    adminQuestions,
     toast,
   } = useApp()
   // Desktop gets a sidebar; smaller screens a row of section tabs.
@@ -357,6 +360,18 @@ export default function AdminPage() {
   }
   if (pending.length > 0)
     badges.requests = { value: pending.length, alert: true, label: "pending" }
+  const qualityIssueCount = buildQualityReport(
+    courses,
+    allWeeks,
+    allPapers,
+    adminQuestions,
+  ).issues.length
+  if (qualityIssueCount > 0)
+    badges.quality = {
+      value: qualityIssueCount,
+      alert: true,
+      label: "findings",
+    }
   if (auditLog.length > 0) badges.audit = { value: auditLog.length }
   const nav = { active: section, badges, onSelect: selectSection }
 
@@ -590,6 +605,38 @@ export default function AdminPage() {
                 onConfirm={setConfirm}
                 audit={audit}
                 onOpenWeek={openReportedWeek}
+              />
+            </section>
+
+            <section
+              hidden={section !== "quality"}
+              aria-labelledby="admin-section-quality"
+            >
+              <SectionHeader
+                id="quality"
+                description="Find duplicate, incomplete, unpublished and disconnected content before learners see it."
+                scope={siteScope}
+              />
+              <QualityPanel
+                courses={courses}
+                weeks={allWeeks}
+                papers={allPapers}
+                questions={adminQuestions}
+                onOpen={(ownerType, ownerId) => {
+                  updateParams(
+                    {
+                      course:
+                        (ownerType === "week"
+                          ? allWeeks.find((item) => item.id === ownerId)
+                              ?.courseId
+                          : allPapers.find((item) => item.id === ownerId)
+                              ?.courseId) ?? null,
+                      section: ownerType === "week" ? "weeks" : "papers",
+                    },
+                    false,
+                  )
+                  if (ownerType === "week") selectWeek(ownerId)
+                }}
               />
             </section>
 

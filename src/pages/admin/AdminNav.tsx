@@ -7,10 +7,11 @@ import {
   LayoutDashboard,
   Megaphone,
   MessageSquareText,
+  ShieldCheck,
 } from "lucide-react"
 import type { IconType } from "./ui"
 
-export type SectionId = "overview" | "weeks" | "papers" | "courses" | "requests" | "announcement" | "audit"
+export type SectionId = "overview" | "weeks" | "papers" | "courses" | "quality" | "requests" | "announcement" | "audit"
 
 interface SectionMeta {
   label: string
@@ -38,6 +39,11 @@ export const SECTIONS: Record<SectionId, SectionMeta> = {
     label: "Courses",
     icon: GraduationCap,
     iconClass: "from-primary-600 to-accent-500",
+  },
+  quality: {
+    label: "Content quality",
+    icon: ShieldCheck,
+    iconClass: "from-amber-500 to-orange-500",
   },
   requests: {
     label: "Requests & feedback",
@@ -74,7 +80,10 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   { ids: ["overview"] },
   { label: "Course content", ids: ["weeks", "papers"] },
-  { label: "Site-wide", ids: ["courses", "requests", "announcement", "audit"] },
+  {
+    label: "Site-wide",
+    ids: ["courses", "quality", "requests", "announcement", "audit"],
+  },
 ]
 
 export interface NavBadge {
