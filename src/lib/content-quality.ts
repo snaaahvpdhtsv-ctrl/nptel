@@ -13,6 +13,9 @@ export interface QualityIssue {
   ownerId?: string
   ownerType?: "week" | "paper"
   questionId?: string
+  questionText?: string
+  ownerTitle?: string
+  courseTitle?: string
 }
 
 export interface DifficultyCount {
@@ -47,6 +50,7 @@ export function buildQualityReport(
 ): QualityReport {
   const issues: QualityIssue[] = []
   const courseIds = new Set(courses.map((course) => course.id))
+  const courseById = new Map(courses.map((course) => [course.id, course]))
   const weekIds = new Set(weeks.map((week) => week.id))
   const paperIds = new Set(papers.map((paper) => paper.id))
   const difficultyCounts = new Map<string, number>()
@@ -74,7 +78,10 @@ export function buildQualityReport(
     ...papers.map((record) => ({ record, ownerType: "paper" as const })),
   ]
   owners.forEach(({ record, ownerType }, index) => {
-    checkedRecords += (questions[record.id] ?? []).length
+    const records = (questions[record.id] ?? []).filter(
+      (question) => question.status !== "archived",
+    )
+    checkedRecords += records.length
     const parentExists = courseIds.has(record.courseId)
     if (!parentExists) {
       issues.push(
@@ -89,6 +96,9 @@ export function buildQualityReport(
             ownerId: record.id,
             ownerType,
             courseId: record.courseId,
+            ownerTitle:
+              ownerType === "week" ? `Week ${record.weekNumber}` : record.title,
+            courseTitle: courseById.get(record.courseId)?.title,
           },
           index,
         ),
@@ -107,12 +117,14 @@ export function buildQualityReport(
             ownerId: record.id,
             ownerType,
             courseId: record.courseId,
+            ownerTitle:
+              ownerType === "week" ? `Week ${record.weekNumber}` : record.title,
+            courseTitle: courseById.get(record.courseId)?.title,
           },
           index + 10,
         ),
       )
     }
-    const records = questions[record.id] ?? []
     const textOwners = new Map<string, AdminQuestion[]>()
     records.forEach((question) => {
       const key = normalize(question.questionText)
@@ -138,6 +150,12 @@ export function buildQualityReport(
               ownerId: record.id,
               ownerType,
               questionId: question.id,
+              questionText: question.questionText,
+              ownerTitle:
+                ownerType === "week"
+                  ? `Week ${record.weekNumber}`
+                  : record.title,
+              courseTitle: courseById.get(record.courseId)?.title,
             },
             index + records.indexOf(question),
           ),
@@ -155,6 +173,12 @@ export function buildQualityReport(
               ownerId: record.id,
               ownerType,
               questionId: question.id,
+              questionText: question.questionText,
+              ownerTitle:
+                ownerType === "week"
+                  ? `Week ${record.weekNumber}`
+                  : record.title,
+              courseTitle: courseById.get(record.courseId)?.title,
             },
             index + records.indexOf(question) + 20,
           ),
@@ -181,8 +205,9 @@ export function buildQualityReport(
       if (
         !question.questionText.trim() ||
         !question.options?.length ||
+        question.options.some((option) => !option.trim()) ||
         question.correctAnswerIndex < 0 ||
-        question.correctAnswerIndex >= question.optionCount
+        question.correctAnswerIndex >= question.options.length
       ) {
         issues.push(
           issue(
@@ -195,8 +220,37 @@ export function buildQualityReport(
               ownerId: record.id,
               ownerType,
               questionId: question.id,
+              questionText: question.questionText,
+              ownerTitle:
+                ownerType === "week"
+                  ? `Week ${record.weekNumber}`
+                  : record.title,
+              courseTitle: courseById.get(record.courseId)?.title,
             },
             index + records.indexOf(question) + 60,
+          ),
+        )
+      }
+      if (question.status === "published" && question.contentReady !== true) {
+        issues.push(
+          issue(
+            {
+              severity: "critical",
+              kind: "publication",
+              title: "Published question is not ready",
+              detail: `Question ${question.id} is published without a readiness marker.`,
+              courseId: record.courseId,
+              ownerId: record.id,
+              ownerType,
+              questionId: question.id,
+              questionText: question.questionText,
+              ownerTitle:
+                ownerType === "week"
+                  ? `Week ${record.weekNumber}`
+                  : record.title,
+              courseTitle: courseById.get(record.courseId)?.title,
+            },
+            index + records.indexOf(question) + 70,
           ),
         )
       }
@@ -215,6 +269,12 @@ export function buildQualityReport(
               ownerId: record.id,
               ownerType,
               questionId: question.id,
+              questionText: question.questionText,
+              ownerTitle:
+                ownerType === "week"
+                  ? `Week ${record.weekNumber}`
+                  : record.title,
+              courseTitle: courseById.get(record.courseId)?.title,
             },
             index + duplicateIndex + 80,
           ),
@@ -235,6 +295,8 @@ export function buildQualityReport(
             ownerId: week.id,
             ownerType: "week",
             courseId: week.courseId,
+            ownerTitle: `Week ${week.weekNumber}`,
+            courseTitle: courseById.get(week.courseId)?.title,
           },
           index + 100,
         ),
@@ -252,6 +314,8 @@ export function buildQualityReport(
             ownerId: paper.id,
             ownerType: "paper",
             courseId: paper.courseId,
+            ownerTitle: paper.title,
+            courseTitle: courseById.get(paper.courseId)?.title,
           },
           index + 120,
         ),

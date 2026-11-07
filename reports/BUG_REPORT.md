@@ -41,6 +41,19 @@ now explicitly identifies the remaining assignment as session-only.
 
 ## Remaining limitations
 
+## Independent content-quality dashboard audit
+
+The dashboard audit at `a7965e2` found and fixed five issues: published
+readiness was normalized away before diagnostics, blank answer options were not
+classified as incomplete, archived questions affected active metrics, search
+omitted IDs/parent metadata, and narrow finding rows cramped their details.
+Regression coverage is in `tests/content-quality.test.mjs`; browser coverage is
+in `tests/admin.e2e.mjs`.
+
+The feature remains **PARTIALLY VERIFIED** because no axe runner or
+large-dataset browser performance suite exists in the repository. See
+`reports/CONTENT_QUALITY_DASHBOARD_QA.md`.
+
 The repository does not define an axe, component-test, Functions-emulator, or
 production-authentication test runner. Those areas remain explicitly
 unverified rather than being reported as passed.

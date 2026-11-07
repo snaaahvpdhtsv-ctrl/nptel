@@ -21,8 +21,12 @@ The six defects from audit commit `1131f3f` were remediated with emulator-backed
 and Playwright evidence. A further optional-field serialization defect found
 during browser verification was fixed in the shared request writer. Regression
 testing also fixed duplicate learner rendering and false-success admin
-moderation feedback in Requests & Feedback. The first planned expansion slice,
-the admin content-quality dashboard, is now implemented and browser-verified.
+moderation feedback in Requests & Feedback. The first planned expansion slice, the admin content-quality dashboard, is
+implemented and independently tested. Its current status is **PARTIALLY
+VERIFIED**: core diagnostics, calculations, filters, access control, and
+responsive rendering pass, while dedicated axe and large-browser performance
+coverage remain unavailable. The detailed findings are in
+`reports/CONTENT_QUALITY_DASHBOARD_QA.md`.
 
 ## Feature matrix
 
@@ -44,6 +48,7 @@ the admin content-quality dashboard, is now implemented and browser-verified.
 | Offline progress queue | Source/UI | Duplicate/conflict handling | Emulator progress | Ownership | Source only | VERIFIED |
 | Auth flows | Sign-in UI | Dedicated E2E unavailable | Source only | Claim rules | UI only | BLOCKED |
 | Admin dashboard | Authenticated E2E | Course/week CRUD and guard | Emulator writes | Claim rules | Not full | VERIFIED |
+| Content quality dashboard | Yes | 6/6 diagnostic tests; admin filter/deep-link E2E | Emulator-backed admin snapshots | Claim-only access and signed-out guard | 390px rendered audit | PARTIALLY VERIFIED |
 
 ## Defects and gaps
 

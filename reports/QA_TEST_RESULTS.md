@@ -25,11 +25,17 @@
 | E2E-003 | Requests moderation | Emulator admin account and seeded feedback | Reply persists and status changes only after write | Admin reply persisted with `status=replied` and reply text | PASS | `npm run test:e2e:admin` |
 | E2E-004 | Duplicate feedback rendering | Emulator learner account | One submission card per Firestore record | Exactly one feedback card before and after reload | PASS | `npm run test:e2e:learner` |
 | ADMIN-QUALITY-001 | Content quality dashboard | Emulator admin with duplicate/incomplete questions | Findings render from Firestore records | Duplicate and missing-explanation findings displayed | PASS | `npm run test:e2e:admin` |
+| ADMIN-QUALITY-002 | Quality diagnostics | Isolated pure fixtures | Normalize duplicates; detect missing, invalid, reference and publication defects; ignore archived records | 6/6 scenarios passed, including 1,000 active questions | PASS | `npm run test:content-quality` |
+| ADMIN-QUALITY-003 | Quality filters/search | Authenticated admin with seeded findings | Filter by severity/category, search question ID, clear filters | ID search and clear-filter flow passed | PASS | `npm run test:e2e:admin` |
+| ADMIN-QUALITY-004 | Quality deep link/access | Authenticated admin then signed out | Open owning content and deny signed-out dashboard access | URL entered `section=weeks`; signed-out route redirected to admin sign-in | PASS | `npm run test:e2e:admin` |
+| ADMIN-QUALITY-005 | Quality responsive render | Emulator admin at 1440×900 and 390×844 | No console/page errors; finding content remains usable | No console/page errors; mobile finding layout fixed and rechecked | PASS | Rendered Playwright audit |
 
 ## Blocked or unavailable
 
 - No configured axe suite, ESLint script, component test runner, or Functions
   emulator test script exists.
+- The 1,000-question check is a pure diagnostic run, not a 1,000-row browser
+  render or Firestore listener load test.
 - Production authentication, admin claims, live rules, and database reads were
   not independently re-authorized during this run.
 - No production writes or deployments were performed.

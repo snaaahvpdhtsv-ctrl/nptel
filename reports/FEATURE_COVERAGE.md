@@ -13,7 +13,7 @@
 | Accessibility controls | Yes | Toggle/persistence checks | N/A | N/A | Yes | PARTIALLY VERIFIED |
 | CSV validation/import | Source/UI | Content-service validation | Admin writes | Admin/draft rules | Source only | PARTIALLY VERIFIED |
 | Question inventory | Source/UI | Filter/flag logic | Content service | Parent ownership | Source only | PARTIALLY VERIFIED |
-| Admin content quality dashboard | Yes | Duplicate, explanation, reference, publication, and difficulty diagnostics | Derived from Firestore content | Admin route and content access | Admin E2E | VERIFIED |
+| Admin content quality dashboard | Yes | 6/6 diagnostic cases; 1,000-record pure run; filters/search/deep link E2E | Derived from Firestore content; rules 11/11 | Claim-only admin access; signed-out guard | 390px rendered audit | PARTIALLY VERIFIED |
 | Draft-review-publish | Yes | Review, approve, reject controls | Rules accept review; draft hidden | Admin claim | Admin E2E/auth | VERIFIED |
 | Audit log | Yes | Append-only emulator test | Firestore subscription/writer | Actor/tamper tests | Source only | PARTIALLY VERIFIED |
 | JSON backups | Yes | Full validation before restore | Atomic batch restore | Admin rules | Source only | VERIFIED |

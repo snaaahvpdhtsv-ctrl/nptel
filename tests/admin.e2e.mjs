@@ -165,6 +165,18 @@ try {
     .first()
     .waitFor()
   await page.getByText("Missing explanation", { exact: true }).first().waitFor()
+  await page.getByLabel("Search quality findings").fill("quality-question-1")
+  await page
+    .getByText("Duplicate question text", { exact: true })
+    .first()
+    .waitFor()
+  assert.equal(
+    await page.getByText("Missing explanation", { exact: true }).count(),
+    1,
+  )
+  await page.getByRole("button", { name: "Clear filters" }).click()
+  await page.getByRole("button", { name: "Open content" }).first().click()
+  await page.waitForURL(/section=weeks/)
   await page.getByText("Log out", { exact: true }).click()
   await page.goto("http://127.0.0.1:4174/admin/dashboard")
   await page.waitForURL(/\/signin\?view=admin/)

@@ -71,13 +71,34 @@ export function QualityPanel({
     (item) =>
       (severity === "all" || item.severity === severity) &&
       (kind === "all" || item.kind === kind) &&
-      (!term || `${item.title} ${item.detail}`.toLowerCase().includes(term)),
+      (!term ||
+        [
+          item.title,
+          item.detail,
+          item.questionId,
+          item.questionText,
+          item.ownerId,
+          item.ownerTitle,
+          item.courseId,
+          item.courseTitle,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(term)),
   )
   const counts = {
     critical: report.issues.filter((item) => item.severity === "critical")
       .length,
     warning: report.issues.filter((item) => item.severity === "warning").length,
   }
+  const categoryCounts = Object.entries(kindLabels)
+    .map(([value, label]) => ({
+      value: value as QualityKind,
+      label,
+      count: report.issues.filter((item) => item.kind === value).length,
+    }))
+    .filter((item) => item.count > 0)
 
   return (
     <div className="space-y-4">
@@ -154,6 +175,30 @@ export function QualityPanel({
             </div>
           )}
         </Panel>
+        <Panel>
+          <PanelTitle title="Issue categories" icon={FileWarning} />
+          {categoryCounts.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              No issue categories detected.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {categoryCounts.map((item) => (
+                <div
+                  key={item.value}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <span className="text-gray-600 dark:text-gray-300">
+                    {item.label}
+                  </span>
+                  <span className="font-semibold tabular-nums text-gray-800 dark:text-white">
+                    {item.count}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
       </div>
 
       <Panel>
@@ -203,6 +248,19 @@ export function QualityPanel({
               </option>
             ))}
           </select>
+          {(query || severity !== "all" || kind !== "all") && (
+            <button
+              type="button"
+              className={smallOutline}
+              onClick={() => {
+                setQuery("")
+                setSeverity("all")
+                setKind("all")
+              }}
+            >
+              Clear filters
+            </button>
+          )}
         </div>
         {visible.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-300 px-5 py-10 text-center dark:border-white/10">
@@ -229,7 +287,7 @@ export function QualityPanel({
                   className={`flex flex-wrap items-center gap-3 rounded-xl border p-3 ${meta.tone}`}
                 >
                   <Icon size={17} className="shrink-0" />
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 basis-full sm:basis-auto">
                     <p className="font-semibold">{item.title}</p>
                     <p className="text-sm opacity-85">{item.detail}</p>
                   </div>

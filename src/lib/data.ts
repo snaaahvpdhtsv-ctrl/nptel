@@ -37,6 +37,7 @@ export type AdminQuestion = {
   correctAnswerIndex: number
   difficulty: string
   status: Status
+  contentReady?: boolean
   /** May be absent on legacy Firestore records that require content repair. */
   options?: string[]
   topic?: string

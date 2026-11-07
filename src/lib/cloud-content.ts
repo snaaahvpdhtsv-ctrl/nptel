@@ -31,10 +31,7 @@ const asCourse = (id: string, value: DocumentData): Course => ({
   title: typeof value.title === "string" ? value.title : "",
   description:
     typeof value.description === "string" ? value.description : undefined,
-  status:
-    value.status === "published" && value.contentReady !== true
-      ? "draft"
-      : asStatus(value.status),
+  status: asStatus(value.status),
   sample: value.sample === true,
 })
 
@@ -48,10 +45,7 @@ const asWeek = (id: string, value: DocumentData): Week => ({
       : 0,
   title: typeof value.title === "string" ? value.title : "",
   questionCount: 0,
-  status:
-    value.status === "published" && value.contentReady !== true
-      ? "draft"
-      : asStatus(value.status),
+  status: asStatus(value.status),
 })
 
 const asPaper = (id: string, value: DocumentData): Paper => ({
@@ -62,10 +56,7 @@ const asPaper = (id: string, value: DocumentData): Paper => ({
   year: typeof value.year === "number" ? value.year : 0,
   session: typeof value.session === "string" ? value.session : "",
   questionCount: 0,
-  status:
-    value.status === "published" && value.contentReady !== true
-      ? "draft"
-      : asStatus(value.status),
+  status: asStatus(value.status),
 })
 
 const asQuestion = (id: string, value: DocumentData): AdminQuestion => {
@@ -87,15 +78,13 @@ const asQuestion = (id: string, value: DocumentData): AdminQuestion => {
         ? value.correctAnswerIndex
         : -1,
     difficulty: typeof value.difficulty === "string" ? value.difficulty : "",
+    contentReady: value.contentReady === true,
     topic: typeof value.topic === "string" ? value.topic : undefined,
     explanation:
       typeof value.explanation === "string" ? value.explanation : undefined,
     reviewNote:
       typeof value.reviewNote === "string" ? value.reviewNote : undefined,
-    status:
-      value.status === "published" && value.contentReady !== true
-        ? "draft"
-        : asStatus(value.status),
+    status: asStatus(value.status),
   }
 }
 
