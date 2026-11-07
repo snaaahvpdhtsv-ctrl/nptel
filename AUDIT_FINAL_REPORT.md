@@ -64,7 +64,9 @@ remaining test-infrastructure limitations are recorded in
 
 | Check | Result |
 |---|---|
-| `npm run test:rules` | PASS — 12/12 emulator tests |
+| `npm run test:rules` | PASS — 13/13 emulator tests |
+| `npm run test:functions-callable` | PASS — trusted callable integration, including audit creation |
+| `npm run test:e2e:audit-history` | PASS — authenticated Firestore audit retrieval, search, refresh |
 | `npm run test:content-service` | PASS — 3/3 tests |
 | `npm run test:bulk-content` | PASS — 3/3 parser tests |
 | `npm run test:e2e:admin` | PASS — authenticated admin CRUD and guard |
@@ -80,6 +82,34 @@ remaining test-infrastructure limitations are recorded in
 | Console/network smoke | PASS for tested local routes |
 | `npm run test:accessibility` | PASS — 23 axe rules, 0 violations; keyboard/focus/mobile checks |
 | `npm run test:performance` | PASS — 100, 500, and 1,000 record browser runs; complete dataset and timing output |
+
+## Admin audit-history remediation
+
+**Root cause:** `Content health check` was inserted optimistically into the
+admin state with a `local-*` identifier before persistence. It could therefore
+remain visible when the Firestore `auditLogs` listener failed. Persisted admin
+sessions could also hold an ID token without the newly provisioned `admin`
+claim until refresh.
+
+**Correction:** Audit creation now goes through the trusted
+`writeAuditEntry` callable in `functions/index.mjs`, which ignores
+browser-supplied actor identity and writes the authenticated UID/email. Client
+creation is disabled in `firestore.rules`; admin reads remain limited to
+`auditLogs`, and updates/deletes remain denied. `auth-state.tsx` forces an ID
+token refresh before claim-dependent listeners start. `AuditPanel.tsx` now
+distinguishes loading, empty, successful Firestore results, and query errors.
+
+**Collection and query:** `auditLogs`, ordered by `createdAt` descending and
+limited to 100 records. The current schema has no course identifier, so
+course-specific history filtering is not implemented.
+
+**Evidence:** Firestore rules **13/13 pass**; trusted Functions callable
+integration passes; the dedicated authenticated Playwright audit-history test
+passes using Auth, Firestore, Functions, and Vite emulators. The browser test
+seeds an actual `auditLogs` document, retrieves it through the admin UI,
+searches it, refreshes it, and confirms no permission error is rendered.
+No production claims, data, rules, Functions, environment variables, or
+deployments were changed.
 
 ## Firebase and production boundary
 

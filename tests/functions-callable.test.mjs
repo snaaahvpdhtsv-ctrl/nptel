@@ -319,6 +319,19 @@ try {
     .where("operationId", "==", editResult.data.operationId)
     .get()
   assert.equal(audit.empty, false)
+  await httpsCallable(
+    functions,
+    "writeAuditEntry",
+  )({
+    action: "Content health check",
+    resource: "Callable QA Course · Content",
+  })
+  const trustedAudit = await database
+    .collection("auditLogs")
+    .where("action", "==", "Content health check")
+    .where("actorId", "==", adminUser.uid)
+    .get()
+  assert.equal(trustedAudit.empty, false)
 
   const multiBatchIds = Array.from(
     { length: 401 },

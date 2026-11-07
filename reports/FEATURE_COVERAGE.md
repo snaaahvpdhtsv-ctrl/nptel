@@ -30,3 +30,15 @@
 `VERIFIED` is limited to the exact emulator/browser behavior listed in the
 evidence. Production writes, deployment, and live-account testing were not
 performed.
+
+## Admin audit history
+
+| Workflow | UI tested | Firebase tested | Security tested | Result |
+|---|---|---|---|---|
+| Admin history retrieval | Authenticated Playwright load, search, refresh | `auditLogs` ordered history query | Trusted admin read; learner/client writes denied | VERIFIED local emulator scope |
+| Trusted audit creation | Admin action boundary | `writeAuditEntry` callable | Callable identity is authoritative; direct client create/update/delete denied | VERIFIED local emulator scope |
+| Error handling | Permission/error state hides results and persisted count | Retry re-subscribes to the real query | No local preview rows are presented as Firestore history | VERIFIED local browser scope |
+
+Audit records are stored in the top-level `auditLogs` collection. The current
+record shape does not contain a course identifier, so course-filtered audit
+queries remain a documented limitation rather than an implied capability.

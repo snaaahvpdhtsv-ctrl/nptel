@@ -17,6 +17,7 @@
     "test:performance": "node tests/performance.e2e.mjs",
     "test:e2e:admin": "node tests/admin.e2e.mjs",
     "test:e2e:functions-bulk": "node tests/functions-bulk.e2e.mjs",
+    "test:e2e:audit-history": "node tests/audit-history.e2e.mjs",
     "test:e2e:learner": "node tests/learner.e2e.mjs"
   },
   "dependencies": {

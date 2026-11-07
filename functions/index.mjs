@@ -77,6 +77,28 @@ export const updateQuestionOperation = callable(
 export const previewQuestionPublication = callable(({ owner, questionIds }) =>
   getPublicationPreview(db, owner, questionIds),
 )
+export const writeAuditEntry = callable(
+  async ({ action, resource }, request) => {
+    if (
+      typeof action !== "string" ||
+      typeof resource !== "string" ||
+      action.trim().length < 1 ||
+      action.trim().length > 200 ||
+      resource.trim().length < 1 ||
+      resource.trim().length > 200
+    )
+      throw new Error("Audit entries require valid action and resource text.")
+    const entry = await db.collection("auditLogs").add({
+      action: action.trim(),
+      resource: resource.trim(),
+      actorId: request.auth.uid,
+      actorEmail: request.auth.token.email ?? null,
+      createdAt: new Date().toISOString(),
+      outcome: "success",
+    })
+    return { id: entry.id }
+  },
+)
 export const retryImportQuestionOperation = callable(
   ({ owner, questions, metadata }, request) =>
     saveQuestionsWithOperation(db, owner, questions, {

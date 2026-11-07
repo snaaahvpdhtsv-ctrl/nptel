@@ -204,7 +204,7 @@ function CourseSwitcher({
 export default function AdminPage() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const { signOut, user } = useAuth()
+  const { signOut, user, adminClaimsLoading } = useAuth()
   const {
     contentLoading,
     contentError,
@@ -229,6 +229,7 @@ export default function AdminPage() {
   const revealQuestions = useRef(false)
 
   useEffect(() => {
+    if (adminClaimsLoading || user?.role !== "admin") return
     setAuditLoading(true)
     setAuditError(null)
     return subscribeToAudit(
@@ -241,7 +242,7 @@ export default function AdminPage() {
         setAuditLoading(false)
       },
     )
-  }, [auditRetry])
+  }, [adminClaimsLoading, auditRetry, user?.role])
 
   // `?course=` picks the course being managed; default to the first one.
   const course =
@@ -318,13 +319,6 @@ export default function AdminPage() {
 
   const audit = useCallback(
     (action: string, resource = "Content") => {
-      const entry = {
-        id: `local-${Date.now()}-${Math.random()}`,
-        action,
-        resource,
-        at: new Date(),
-      }
-      setAuditLog((current) => [entry, ...current])
       if (!user) return
       void writeAudit(action, resource, user.id, user.email).catch((error) => {
         setAuditError(

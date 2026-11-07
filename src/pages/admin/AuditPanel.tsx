@@ -35,9 +35,11 @@ export function AuditPanel({
         <p className="text-sm text-gray-500 dark:text-gray-400">
           {loading
             ? "Loading recent admin changes…"
-            : `${entries.length} ${
-                entries.length === 1 ? "entry" : "entries"
-              } from Firestore`}
+            : error
+              ? "Audit history is unavailable"
+              : `${entries.length} ${
+                  entries.length === 1 ? "entry" : "entries"
+                } from Firestore`}
         </p>
         <button onClick={onRetry} disabled={loading} className={smallOutline}>
           {loading ? "Loading…" : "Refresh"}
@@ -55,6 +57,7 @@ export function AuditPanel({
         </div>
       )}
       {!loading &&
+        !error &&
         (entries.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-gray-400">
             No audit entries yet. Successful admin actions will appear here.

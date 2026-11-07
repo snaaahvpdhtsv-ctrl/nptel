@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   limit,
   onSnapshot,
@@ -7,8 +6,9 @@ import {
   query,
   type Unsubscribe,
 } from "firebase/firestore"
+import { httpsCallable } from "firebase/functions"
 import type { AuditEntry } from "../pages/admin/AuditPanel"
-import { firestore } from "./firebase"
+import { firebaseFunctions, firestore } from "./firebase"
 
 export function subscribeToAudit(
   onEntries: (entries: AuditEntry[]) => void,
@@ -56,13 +56,13 @@ export async function writeAudit(
   actorId: string,
   actorEmail?: string | null,
 ) {
-  if (!firestore) throw new Error("Firebase Firestore is not configured.")
-  await addDoc(collection(firestore, "auditLogs"), {
+  if (!firebaseFunctions)
+    throw new Error("Trusted audit service is not configured.")
+  if (!actorId) throw new Error("An authenticated admin is required.")
+  const callable = httpsCallable(firebaseFunctions, "writeAuditEntry")
+  await callable({
     action: action.trim().slice(0, 200),
     resource: resource.trim().slice(0, 200),
-    actorId,
     actorEmail: actorEmail?.trim().slice(0, 320) || null,
-    createdAt: new Date().toISOString(),
-    outcome: "success",
   })
 }

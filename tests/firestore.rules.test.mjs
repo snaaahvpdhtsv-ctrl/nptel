@@ -12,6 +12,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  orderBy,
   query,
   setDoc,
   updateDoc,
@@ -30,6 +31,7 @@ before(async () => {
     projectId,
     firestore: { rules },
   })
+
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const database = context.firestore()
     await setDoc(doc(database, "courses", "published"), {
@@ -118,6 +120,45 @@ before(async () => {
 
 after(async () => {
   await testEnv?.cleanup()
+})
+
+test("audit history is admin-readable but client creation is denied", async () => {
+  const admin = testEnv
+    .authenticatedContext("audit-query-admin", { admin: true })
+    .firestore()
+  const learner = testEnv
+    .authenticatedContext("audit-query-learner")
+    .firestore()
+  await assertFails(
+    setDoc(doc(admin, "auditLogs", "client-created"), {
+      action: "Client attempt",
+      resource: "Content",
+      actorId: "audit-query-admin",
+      createdAt: new Date().toISOString(),
+      outcome: "success",
+    }),
+  )
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "auditLogs", "server-entry-1"), {
+      action: "Content health check",
+      resource: "Course A · Content",
+      actorId: "trusted-function",
+      createdAt: "2026-01-01T10:00:00.000Z",
+      outcome: "success",
+    })
+    await setDoc(doc(context.firestore(), "auditLogs", "server-entry-2"), {
+      action: "Question published",
+      resource: "Course B · Week 1",
+      actorId: "trusted-function",
+      createdAt: "2026-01-01T11:00:00.000Z",
+      outcome: "success",
+    })
+  })
+  const history = await getDocs(
+    query(collection(admin, "auditLogs"), orderBy("createdAt", "desc")),
+  )
+  assert.equal(history.size, 2)
+  await assertFails(getDocs(collection(learner, "auditLogs")))
 })
 
 test("guests can read published content, not drafts", async () => {
@@ -606,34 +647,6 @@ test("users can read only their own feedback and cannot moderate it", async () =
       createdAt: "2025-01-01T10:00:00.000Z",
       ownerId: "learner-1",
     })
-
-    test("audit logs are admin-readable, append-only, and actor-bound", async () => {
-      const admin = testEnv
-        .authenticatedContext("admin-audit", { admin: true })
-        .firestore()
-      const learner = testEnv.authenticatedContext("learner-audit").firestore()
-      const entry = doc(admin, "auditLogs", "entry-1")
-      const data = {
-        action: "Question published",
-        resource: "Course · Week 1",
-        actorId: "admin-audit",
-        actorEmail: "admin@example.com",
-        createdAt: new Date().toISOString(),
-        outcome: "success",
-      }
-
-      await assertSucceeds(setDoc(entry, data))
-      await assertSucceeds(getDoc(entry))
-      await assertFails(getDoc(doc(learner, "auditLogs", "entry-1")))
-      await assertFails(
-        setDoc(doc(learner, "auditLogs", "entry-2"), {
-          ...data,
-          actorId: "learner-audit",
-        }),
-      )
-      await assertFails(updateDoc(entry, { action: "Changed" }))
-      await assertFails(deleteDoc(entry))
-    })
   })
 
   const owner = testEnv.authenticatedContext("learner-1").firestore()
@@ -655,4 +668,35 @@ test("users can read only their own feedback and cannot moderate it", async () =
     }),
   )
   await assertSucceeds(getDoc(doc(admin, "feedback", "owned")))
+})
+
+test("audit logs are admin-readable, immutable, and client-write protected", async () => {
+  const admin = testEnv
+    .authenticatedContext("admin-audit", { admin: true })
+    .firestore()
+  const learner = testEnv.authenticatedContext("learner-audit").firestore()
+  const entry = doc(admin, "auditLogs", "entry-1")
+  const data = {
+    action: "Question published",
+    resource: "Course - Week 1",
+    actorId: "admin-audit",
+    actorEmail: "admin@example.com",
+    createdAt: new Date().toISOString(),
+    outcome: "success",
+  }
+
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "auditLogs", "entry-1"), data)
+  })
+  await assertFails(setDoc(entry, data))
+  await assertSucceeds(getDoc(entry))
+  await assertFails(getDoc(doc(learner, "auditLogs", "entry-1")))
+  await assertFails(
+    setDoc(doc(learner, "auditLogs", "entry-2"), {
+      ...data,
+      actorId: "learner-audit",
+    }),
+  )
+  await assertFails(updateDoc(entry, { action: "Changed" }))
+  await assertFails(deleteDoc(entry))
 })

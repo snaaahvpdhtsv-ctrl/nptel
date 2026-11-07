@@ -78,3 +78,25 @@ preview and trusted audit entry. Imports execute in bounded batches with
 stable operation IDs, progress states, deterministic emulator failure
 injection, idempotent retry, and conflict-aware rollback. Production
 deployment and production-data verification remain out of scope.
+
+### Resolved: admin audit-history permission failure
+
+The visible `Content health check` row was previously an optimistic
+`local-*` UI entry, not proof that the `auditLogs` Firestore query succeeded.
+The history listener also could start with stale persisted custom claims.
+Audit creation now uses the trusted `writeAuditEntry` callable, which records
+the callable identity and timestamp; direct client creation, updates, and
+deletes are denied by `firestore.rules`. Auth state force-refreshes the ID
+token before the admin history listener subscribes, and the panel reports
+query errors without showing local records or a false persisted count.
+
+Verified with:
+
+- `npm run test:rules` — 13/13 Firestore emulator tests.
+- `npm run test:functions-callable` — callable integration passed, including
+  trusted audit creation.
+- `npm run test:e2e:audit-history` — authenticated admin retrieved the seeded
+  `auditLogs` record, searched it, refreshed it, and saw no permission error.
+
+The collection path is `auditLogs`; the current schema has no course field, so
+course-specific filtering is not available in this audit-history model.

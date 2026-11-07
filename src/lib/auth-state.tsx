@@ -240,7 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         recordAuthDiagnostic("auth.id-token.started", {
           eventSequence,
         })
-        void getIdTokenResult(firebaseUser)
+        void getIdTokenResult(firebaseUser, true)
           .then((token) => {
             const isAdmin = token.claims.admin === true
             recordAuthDiagnostic("auth.id-token.completed", {

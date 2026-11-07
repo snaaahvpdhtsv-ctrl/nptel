@@ -16,6 +16,7 @@ const env = {
   VITE_FIREBASE_PROJECT_ID: "demo-nptel",
   VITE_FIREBASE_AUTH_EMULATOR_URL: "http://127.0.0.1:9099",
   VITE_FIREBASE_FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080",
+  VITE_FIREBASE_FUNCTIONS_EMULATOR_HOST: "127.0.0.1:5001",
 }
 process.env.FIREBASE_AUTH_EMULATOR_HOST = env.FIREBASE_AUTH_EMULATOR_HOST
 process.env.FIRESTORE_EMULATOR_HOST = env.FIRESTORE_EMULATOR_HOST
@@ -40,7 +41,7 @@ const firebase = start("npx", [
   "firebase",
   "emulators:start",
   "--only",
-  "auth,firestore",
+  "auth,firestore,functions",
   "--project",
   "demo-nptel",
 ])
@@ -50,6 +51,7 @@ try {
   await Promise.all([
     waitFor("http://127.0.0.1:8080"),
     waitFor("http://127.0.0.1:9099"),
+    waitFor("http://127.0.0.1:5001"),
     waitFor("http://127.0.0.1:4174"),
   ])
   const adminApp = getApps().length
