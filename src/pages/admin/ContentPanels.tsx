@@ -8,6 +8,7 @@ import {
 } from "react"
 import {
   ArrowUp,
+  Archive,
   ChevronDown,
   ChevronUp,
   Copy,
@@ -32,6 +33,7 @@ import {
 } from "../../lib/data"
 import {
   csvCell,
+  dangerOutline,
   downloadFile,
   Field,
   formShell,
@@ -726,8 +728,49 @@ export function QuestionList({
   } | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const [difficultyFilter, setDifficultyFilter] = useState("all")
+  const [statusFilter, setStatusFilter] = useState<Status | "all">("all")
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const flags = showFlags ? questionFlags(questions) : []
   const owner = { id: listId, courseId: ownerCourseId, type: ownerType }
+  const duplicateQuestionIds = new Set(
+    questions
+      .filter((question, index) =>
+        questions.some(
+          (other, otherIndex) =>
+            index !== otherIndex &&
+            question.questionText.trim().toLowerCase() !== "" &&
+            question.questionText.trim().toLowerCase() ===
+              other.questionText.trim().toLowerCase(),
+        ),
+      )
+      .map((question) => question.id),
+  )
+  const duplicateOptionIds = new Set(
+    questions
+      .filter((question) => {
+        const options = (question.options ?? []).map((option) =>
+          option.trim().toLowerCase(),
+        )
+        return new Set(options).size !== options.length
+      })
+      .map((question) => question.id),
+  )
+  const term = query.trim().toLowerCase()
+  const filteredQuestions = questions.filter((question) => {
+    const matchesText =
+      !term ||
+      `${question.questionText} ${question.topic ?? ""}`
+        .toLowerCase()
+        .includes(term)
+    const matchesDifficulty =
+      difficultyFilter === "all" ||
+      question.difficulty.toLowerCase() === difficultyFilter
+    const matchesStatus =
+      statusFilter === "all" || question.status === statusFilter
+    return matchesText && matchesDifficulty && matchesStatus
+  })
   const persistQuestion = async (question: AdminQuestion) => {
     try {
       await saveQuestion(owner, question)
@@ -809,6 +852,99 @@ export function QuestionList({
         </div>
       )}
 
+      {questions.length > 0 && (
+        <div className="mb-4 space-y-2 rounded-xl border border-gray-200 p-3 dark:border-white/10">
+          <div className="flex flex-wrap gap-2">
+            <div className="relative min-w-52 flex-1">
+              <Search
+                size={15}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                aria-label="Search questions"
+                placeholder="Search question text or topic"
+                className="input py-2 pl-9"
+              />
+            </div>
+            <select
+              value={difficultyFilter}
+              onChange={(event) => setDifficultyFilter(event.target.value)}
+              aria-label="Filter questions by difficulty"
+              className="input w-auto py-2"
+            >
+              <option value="all">All difficulties</option>
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(event) =>
+                setStatusFilter(event.target.value as Status | "all")
+              }
+              aria-label="Filter questions by status"
+              className="input w-auto py-2"
+            >
+              <option value="all">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600 dark:text-gray-400">
+            <span>
+              Showing {filteredQuestions.length} of {questions.length} questions
+              {duplicateQuestionIds.size > 0 &&
+                ` · ${duplicateQuestionIds.size} duplicate question${
+                  duplicateQuestionIds.size === 1 ? "" : "s"
+                }`}
+              {duplicateOptionIds.size > 0 &&
+                ` · ${duplicateOptionIds.size} with duplicate options`}
+            </span>
+            {selectedIds.size > 0 && (
+              <button
+                type="button"
+                className={dangerOutline}
+                onClick={() =>
+                  onConfirm({
+                    title: `Archive ${selectedIds.size} questions?`,
+                    body: "Selected question records will be hidden from learner views and retained so existing bookmarks and quiz attempts remain valid.",
+                    confirmLabel: "Archive selected",
+                    onConfirm: async () => {
+                      try {
+                        for (const id of selectedIds) {
+                          await archiveQuestion(owner, id)
+                        }
+                        audit(
+                          `Archived ${plural(selectedIds.size, "question")}`,
+                          ownerLabel,
+                        )
+                        toast(
+                          `Archived ${plural(selectedIds.size, "question")}`,
+                        )
+                        setSelectedIds(new Set())
+                      } catch (error) {
+                        toast(
+                          error instanceof Error
+                            ? error.message
+                            : "Selected questions couldn't be archived.",
+                          "error",
+                        )
+                      }
+                    },
+                  })
+                }
+              >
+                <Archive size={14} />
+                Archive selected
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {bulkOpen && (
         <BulkUpload
           existing={questions}
@@ -859,9 +995,13 @@ export function QuestionList({
         <p className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
           No question records yet.
         </p>
+      ) : filteredQuestions.length === 0 ? (
+        <p className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+          No questions match these filters. Try clearing the search or filters.
+        </p>
       ) : (
         <div className="space-y-2.5">
-          {questions.map((question, index) =>
+          {filteredQuestions.map((question, index) =>
             form?.mode === "edit" && form.id === question.id ? (
               <QuestionForm
                 key={question.id}
@@ -883,6 +1023,20 @@ export function QuestionList({
                 key={question.id}
                 className="flex flex-wrap items-start gap-x-3 gap-y-1.5 rounded-xl bg-gray-50 px-3 py-3 dark:bg-white/[0.035]"
               >
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(question.id)}
+                  onChange={() =>
+                    setSelectedIds((current) => {
+                      const next = new Set(current)
+                      if (next.has(question.id)) next.delete(question.id)
+                      else next.add(question.id)
+                      return next
+                    })
+                  }
+                  aria-label={`Select question ${index + 1}`}
+                  className="mt-1.5 h-4 w-4 shrink-0 accent-primary-600"
+                />
                 <div className="min-w-0 flex-1 basis-60">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">
@@ -896,6 +1050,21 @@ export function QuestionList({
                         {question.difficulty}
                       </span>
                     )}
+                    {duplicateQuestionIds.has(question.id) && (
+                      <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                        Duplicate question
+                      </span>
+                    )}
+                    {duplicateOptionIds.has(question.id) && (
+                      <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                        Duplicate options
+                      </span>
+                    )}
+                    {!question.explanation?.trim() && (
+                      <span className="rounded-md bg-gray-200 px-1.5 py-0.5 text-xs text-gray-700 dark:bg-white/10 dark:text-gray-300">
+                        Missing explanation
+                      </span>
+                    )}
                   </div>
                   <p className="mt-1.5 text-sm text-gray-800 dark:text-gray-100">
                     {question.questionText || "Untitled question"}
@@ -906,6 +1075,23 @@ export function QuestionList({
                   </p>
                 </div>
                 <div className="ml-auto flex shrink-0">
+                  <IconButton
+                    icon={Copy}
+                    label={`Duplicate question ${index + 1}`}
+                    onClick={async () => {
+                      const duplicate = await persistQuestion({
+                        ...question,
+                        id: newQuestionId(),
+                        status: "draft",
+                      })
+                      if (!duplicate) return
+                      audit(
+                        `Question ${index + 1} duplicated as draft`,
+                        ownerLabel,
+                      )
+                      toast("Question duplicated as a draft")
+                    }}
+                  />
                   <IconButton
                     icon={question.status === "published" ? EyeOff : Eye}
                     label={
