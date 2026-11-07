@@ -34,6 +34,10 @@ export function subscribeToAudit(
               typeof value.action === "string" ? value.action : "Admin action",
             resource:
               typeof value.resource === "string" ? value.resource : "Content",
+            actorId:
+              typeof value.actorId === "string" ? value.actorId : undefined,
+            actorEmail:
+              typeof value.actorEmail === "string" ? value.actorEmail : null,
             at:
               typeof value.createdAt === "string"
                 ? new Date(value.createdAt)

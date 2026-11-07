@@ -340,9 +340,22 @@ Example row:
         .toLowerCase(),
     )
     const column = (name: string) => header.indexOf(name.toLowerCase())
-    if (column("questionText") < 0 || column("options") < 0)
+    const expectedColumns = [
+      "questionText",
+      "options",
+      "correctAnswer",
+      "explanation",
+      "difficulty",
+      "topic",
+    ]
+    if (
+      header.length !== expectedColumns.length ||
+      expectedColumns.some(
+        (name, index) => header[index] !== name.toLowerCase(),
+      )
+    )
       return toast(
-        "File must contain questionText and options columns",
+        `CSV headers must be exactly: ${expectedColumns.join(", ")}`,
         "error",
       )
 
@@ -356,10 +369,8 @@ Example row:
       const get = (name: string) =>
         column(name) < 0 ? "" : (row[column(name)] ?? "").trim()
       const text = get("questionText")
-      const options = get("options")
-        .split("|")
-        .map((option) => option.trim())
-        .filter(Boolean)
+      const rawOptions = get("options").split("|")
+      const options = rawOptions.map((option) => option.trim()).filter(Boolean)
       const answer = get("correctAnswer")
       const correct = /^[a-z]$/i.test(answer)
         ? answer.toUpperCase().charCodeAt(0) - 65
@@ -377,6 +388,13 @@ Example row:
           row: rowNumber,
           field: "options",
           reason: "Question must have between 2 and 6 options.",
+          value: get("options"),
+        })
+      if (rawOptions.some((option) => !option.trim()))
+        rowIssues.push({
+          row: rowNumber,
+          field: "options",
+          reason: "Options cannot be empty.",
           value: get("options"),
         })
       if (

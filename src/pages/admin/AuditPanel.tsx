@@ -6,6 +6,8 @@ export interface AuditEntry {
   id: number | string
   action: string
   resource: string
+  actorId?: string
+  actorEmail?: string | null
   at: Date
 }
 
@@ -81,7 +83,7 @@ export function AuditPanel({
                       ["time", "admin", "action", "resource"],
                       ...entries.map((entry) => [
                         entry.at.toISOString(),
-                        "Admin",
+                        entry.actorEmail ?? entry.actorId ?? "Admin",
                         entry.action,
                         entry.resource,
                       ]),
@@ -115,6 +117,9 @@ export function AuditPanel({
                     </span>
                     <span className="text-xs text-gray-500">
                       {entry.resource}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {entry.actorEmail ?? entry.actorId ?? "Admin"}
                     </span>
                     <span className="ml-auto text-xs text-gray-500">
                       {entry.at.toLocaleString()}
