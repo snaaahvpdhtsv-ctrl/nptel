@@ -280,6 +280,7 @@ function BulkUpload({
 }) {
   const { toast } = useApp()
   const inputRef = useRef<HTMLInputElement>(null)
+  const [csvInfoOpen, setCsvInfoOpen] = useState(false)
   const [result, setResult] = useState<{
     fileName: string
     valid: AdminQuestion[]
@@ -397,6 +398,13 @@ function BulkUpload({
             Upload CSV file
           </button>
           <button
+            type="button"
+            onClick={() => setCsvInfoOpen(true)}
+            className={smallOutline}
+          >
+            CSV info
+          </button>
+          <button
             onClick={() =>
               downloadFile(
                 "questions-template.csv",
@@ -455,6 +463,47 @@ function BulkUpload({
           </div>
         </div>
       )}
+      <Modal
+        open={csvInfoOpen}
+        title="CSV upload format"
+        onClose={() => setCsvInfoOpen(false)}
+        footer={
+          <button
+            type="button"
+            onClick={() => setCsvInfoOpen(false)}
+            className={smallOutline}
+          >
+            Close
+          </button>
+        }
+      >
+        <div className="space-y-4 text-sm text-gray-600 dark:text-gray-300">
+          <p>
+            Create a UTF-8 CSV file with one question per row and these columns
+            in this exact order:
+          </p>
+          <pre className="overflow-x-auto rounded-lg bg-gray-100 p-3 text-xs text-gray-800 dark:bg-white/10 dark:text-gray-100">
+            questionText,options,correctAnswer,explanation,difficulty,topic
+          </pre>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>Separate answer options with the pipe symbol: |</li>
+            <li>Use A–F or 1–6 for correctAnswer, not the full answer text.</li>
+            <li>Each question must contain between 2 and 6 options.</li>
+            <li>Use Easy, Medium, or Hard for difficulty.</li>
+            <li>Wrap fields containing commas in double quotes.</li>
+            <li>Maximum 450 question rows and 5 MB per file.</li>
+            <li>Imported questions are saved as drafts for review.</li>
+          </ul>
+          <div>
+            <p className="mb-1 font-semibold text-gray-800 dark:text-white">
+              Example row
+            </p>
+            <pre className="overflow-x-auto rounded-lg bg-gray-100 p-3 text-xs text-gray-800 dark:bg-white/10 dark:text-gray-100">
+              {`"What is emotional regulation?","Managing emotions|Ignoring emotions|Avoiding people|Suppressing all feelings",A,"Managing emotions effectively.",Easy,"Emotional Regulation"`}
+            </pre>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
