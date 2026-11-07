@@ -689,6 +689,37 @@ export function questionFlags(questions: AdminQuestion[]) {
   )
 }
 
+function getPublishReview(question: AdminQuestion, siblings: AdminQuestion[]) {
+  const errors: string[] = []
+  const warnings: string[] = []
+  if (!isValidQuestion(question))
+    errors.push(
+      "Add question text, 2–6 non-empty options, and a valid correct answer.",
+    )
+  const normalizedText = question.questionText.trim().toLowerCase()
+  if (
+    normalizedText &&
+    siblings.some(
+      (item) =>
+        item.id !== question.id &&
+        item.questionText.trim().toLowerCase() === normalizedText,
+    )
+  )
+    errors.push("Another question in this week has the same question text.")
+  const normalizedOptions = (question.options ?? []).map((option) =>
+    option.trim().toLowerCase(),
+  )
+  if (new Set(normalizedOptions).size !== normalizedOptions.length)
+    errors.push("Answer options must be unique.")
+  if (!question.explanation?.trim())
+    warnings.push("Add an explanation so learners can review the answer.")
+  if (!question.topic?.trim())
+    warnings.push("Add a topic to improve filtering and content quality.")
+  if (!question.difficulty?.trim())
+    warnings.push("Add a difficulty level for better learner guidance.")
+  return { errors, warnings }
+}
+
 export function QuestionList({
   listId,
   ownerCourseId,
@@ -732,6 +763,10 @@ export function QuestionList({
   const [difficultyFilter, setDifficultyFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState<Status | "all">("all")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [publishReview, setPublishReview] = useState<{
+    question: AdminQuestion
+    closeForm: boolean
+  } | null>(null)
   const flags = showFlags ? questionFlags(questions) : []
   const owner = { id: listId, courseId: ownerCourseId, type: ownerType }
   const duplicateQuestionIds = new Set(
@@ -782,6 +817,16 @@ export function QuestionList({
       )
       return false
     }
+  }
+  const requestQuestionSave = async (
+    question: AdminQuestion,
+    closeForm = false,
+  ) => {
+    if (question.status === "published") {
+      setPublishReview({ question, closeForm })
+      return false
+    }
+    return persistQuestion(question)
   }
 
   const body = (
@@ -980,8 +1025,9 @@ export function QuestionList({
           editing={false}
           onCancel={() => setForm(null)}
           onSubmit={async (draft) => {
-            const saved = await persistQuestion(
+            const saved = await requestQuestionSave(
               fromDraft(draft, newQuestionId()),
+              true,
             )
             if (!saved) return
             audit(`Question added as ${draft.status}`, ownerLabel)
@@ -1009,8 +1055,9 @@ export function QuestionList({
                 editing
                 onCancel={() => setForm(null)}
                 onSubmit={async (draft) => {
-                  const saved = await persistQuestion(
+                  const saved = await requestQuestionSave(
                     fromDraft(draft, question.id),
+                    true,
                   )
                   if (!saved) return
                   audit(`Question ${index + 1} edited`, ownerLabel)
@@ -1102,7 +1149,7 @@ export function QuestionList({
                     onClick={async () => {
                       const status: Status =
                         question.status === "published" ? "draft" : "published"
-                      const saved = await persistQuestion({
+                      const saved = await requestQuestionSave({
                         ...question,
                         status,
                       })
@@ -1143,6 +1190,96 @@ export function QuestionList({
           )}
         </div>
       )}
+
+      <Modal
+        open={publishReview !== null}
+        title="Review before publishing"
+        onClose={() => setPublishReview(null)}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setPublishReview(null)}
+              className="btn-ghost px-4 py-2 text-sm"
+            >
+              Keep as draft
+            </button>
+            <button
+              type="button"
+              disabled={
+                publishReview
+                  ? getPublishReview(publishReview.question, questions).errors
+                      .length > 0
+                  : true
+              }
+              onClick={async () => {
+                if (!publishReview) return
+                const saved = await persistQuestion(publishReview.question)
+                if (!saved) return
+                audit("Question published after review", ownerLabel)
+                toast("Question published")
+                if (publishReview.closeForm) setForm(null)
+                setPublishReview(null)
+              }}
+              className={smallPrimary}
+            >
+              Publish question
+            </button>
+          </>
+        }
+      >
+        {publishReview &&
+          (() => {
+            const review = getPublishReview(publishReview.question, questions)
+            return (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-700 dark:text-gray-200">
+                  Review this question before it becomes visible to learners.
+                </p>
+                <div className="rounded-xl border border-gray-200 p-3 dark:border-white/10">
+                  <p className="font-medium text-gray-800 dark:text-white">
+                    {publishReview.question.questionText || "Untitled question"}
+                  </p>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {publishReview.question.optionCount} options ·{" "}
+                    {publishReview.question.difficulty || "No difficulty"} ·{" "}
+                    {publishReview.question.topic || "No topic"}
+                  </p>
+                </div>
+                {review.errors.length > 0 && (
+                  <div
+                    role="alert"
+                    className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200"
+                  >
+                    <p className="font-semibold">Publishing is blocked</p>
+                    <ul className="mt-1 list-disc space-y-1 pl-5">
+                      {review.errors.map((error) => (
+                        <li key={error}>{error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {review.warnings.length > 0 && (
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+                    <p className="font-semibold">
+                      Recommended before publishing
+                    </p>
+                    <ul className="mt-1 list-disc space-y-1 pl-5">
+                      {review.warnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {review.errors.length === 0 && review.warnings.length === 0 && (
+                  <p className="rounded-xl border border-green-300 bg-green-50 p-3 text-sm text-green-800 dark:border-green-900/60 dark:bg-green-950/30 dark:text-green-200">
+                    This question passes the local publication review.
+                  </p>
+                )}
+              </div>
+            )
+          })()}
+      </Modal>
 
       <Modal
         open={previewOpen}
