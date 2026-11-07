@@ -10,6 +10,7 @@ import {
   ArrowUp,
   ChevronDown,
   ChevronUp,
+  Copy,
   Download,
   Eye,
   EyeOff,
@@ -287,6 +288,22 @@ function BulkUpload({
     errors: string[]
   } | null>(null)
 
+  const csvInfoText = `CSV upload format
+
+Create a UTF-8 CSV file with one question per row and these columns in this exact order:
+questionText,options,correctAnswer,explanation,difficulty,topic
+
+- Separate answer options with the pipe symbol: |
+- Use A-F or 1-6 for correctAnswer, not the full answer text.
+- Each question must contain between 2 and 6 options.
+- Use Easy, Medium, or Hard for difficulty.
+- Wrap fields containing commas in double quotes.
+- Maximum 450 question rows and 5 MB per file.
+- Imported questions are saved as drafts for review.
+
+Example row:
+"What is emotional regulation?","Managing emotions|Ignoring emotions|Avoiding people|Suppressing all feelings",A,"Managing emotions effectively.",Easy,"Emotional Regulation"`
+
   const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ""
@@ -468,13 +485,30 @@ function BulkUpload({
         title="CSV upload format"
         onClose={() => setCsvInfoOpen(false)}
         footer={
-          <button
-            type="button"
-            onClick={() => setCsvInfoOpen(false)}
-            className={smallOutline}
-          >
-            Close
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(csvInfoText)
+                  toast("CSV information copied to clipboard", "success")
+                } catch {
+                  toast("Couldn't copy CSV information", "error")
+                }
+              }}
+              className={smallOutline}
+            >
+              <Copy size={14} />
+              Copy all info
+            </button>
+            <button
+              type="button"
+              onClick={() => setCsvInfoOpen(false)}
+              className={smallOutline}
+            >
+              Close
+            </button>
+          </>
         }
       >
         <div className="space-y-4 text-sm text-gray-600 dark:text-gray-300">
