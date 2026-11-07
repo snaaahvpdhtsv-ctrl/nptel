@@ -296,9 +296,14 @@ function BulkUpload({
       return toast("Only CSV files can be read in this preview", "error")
     const rows = parseCsv(await file.text())
     if (rows.length < 2) return toast("No rows found in file", "error")
-    if (rows.length - 1 > 500)
-      return toast("File too large — maximum 500 rows", "error")
-    const header = rows[0].map((cell) => cell.trim().toLowerCase())
+    if (rows.length - 1 > 450)
+      return toast("File too large — maximum 450 rows", "error")
+    const header = rows[0].map((cell) =>
+      cell
+        .replace(/^\uFEFF/, "")
+        .trim()
+        .toLowerCase(),
+    )
     const column = (name: string) => header.indexOf(name.toLowerCase())
     if (column("questionText") < 0 || column("options") < 0)
       return toast(
@@ -326,8 +331,8 @@ function BulkUpload({
         : Number(answer) - 1
       let error = ""
       if (!text) error = "Question text is missing."
-      else if (options.length < 2)
-        error = "Question has empty or insufficient options."
+      else if (options.length < 2 || options.length > 6)
+        error = "Question must have between 2 and 6 options."
       else if (
         !Number.isInteger(correct) ||
         correct < 0 ||
@@ -367,7 +372,7 @@ function BulkUpload({
           </h3>
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             Expected columns: {templateColumns.join(", ")}. Separate options
-            with “|”. Maximum 500 rows and 5 MB. This preview reads CSV files
+            with “|”. Maximum 450 rows and 5 MB. This preview reads CSV files
             only.
           </p>
         </div>
