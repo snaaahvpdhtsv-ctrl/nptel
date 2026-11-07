@@ -21,12 +21,15 @@ import { ProgressContext, type ProgressState } from "./progress-context"
 import {
   emptyProgress,
   GUEST_OWNER,
+  enqueueProgressSync,
   progressKey,
   readProgress,
   removeProgress,
   writeProgress,
 } from "./progress-storage"
 import { loadCloudProgress, saveCloudProgress } from "./cloud-progress"
+import { syncQueuedProgress } from "./cloud-progress"
+import { useOfflineState } from "./offline"
 
 interface Store {
   owner: string
@@ -44,7 +47,10 @@ function createId() {
 export function ProgressProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const { toast } = useApp()
+  const { online } = useOfflineState()
   const owner = user?.id ?? GUEST_OWNER
+  const [syncStatus, setSyncStatus] =
+    useState<"idle" | "syncing" | "synced" | "offline" | "error">("idle")
   const [store, setStore] = useState<Store>(() => ({
     owner,
     data: load(owner),
@@ -73,15 +79,48 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       latest.current = next
       setStore(next)
       if (next.owner !== GUEST_OWNER) {
-        void saveCloudProgress(next.owner, previous.data, data).catch(() => {
-          toast(
-            "Your progress is saved on this device but couldn't sync to your account",
-          )
-        })
+        enqueueProgressSync(next.owner, previous.data, data)
+        if (!online) setSyncStatus("offline")
+        else
+          void syncQueuedProgress(next.owner)
+            .then(() => setSyncStatus("synced"))
+            .catch(() => {
+              setSyncStatus("error")
+              toast(
+                "Your progress is saved on this device but couldn't sync to your account",
+              )
+            })
       }
     },
-    [toast],
+    [online, toast],
   )
+
+  const syncPending = useCallback(async () => {
+    if (!user?.id) return
+    if (!online) {
+      setSyncStatus("offline")
+      return
+    }
+    setSyncStatus("syncing")
+    try {
+      await syncQueuedProgress(user.id)
+      setSyncStatus("synced")
+    } catch {
+      setSyncStatus("error")
+    }
+  }, [online, user?.id])
+
+  useEffect(() => {
+    if (!user?.id) {
+      setSyncStatus("idle")
+      return
+    }
+    if (!online) {
+      setSyncStatus("offline")
+      return
+    }
+    void syncPending()
+  }, [online, syncPending, user?.id])
 
   const toggleSaved = useCallback(
     (questionId: string) => {
@@ -198,6 +237,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       attempts,
       savedIds,
       streak,
+      syncStatus,
+      retrySync: () => void syncPending(),
       toggleSaved,
       recordAttempt,
       clearHistory,
@@ -207,6 +248,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       attempts,
       savedIds,
       streak,
+      syncStatus,
+      syncPending,
       toggleSaved,
       recordAttempt,
       clearHistory,

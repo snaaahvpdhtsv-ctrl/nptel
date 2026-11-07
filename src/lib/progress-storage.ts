@@ -13,6 +13,15 @@ import {
 export const GUEST_OWNER = "guest"
 
 export const progressKey = (ownerId: string) => `nptel-progress:${ownerId}`
+const syncQueueKey = (ownerId: string) => `nptel-progress-sync:${ownerId}`
+
+export interface ProgressSyncJob {
+  id: string
+  ownerId: string
+  previous: ProgressData
+  next: ProgressData
+  createdAt: string
+}
 
 export function emptyProgress(): ProgressData {
   return { version: 1, attempts: [], savedIds: [] }
@@ -151,5 +160,61 @@ export function removeProgress(ownerId: string) {
     localStorage.removeItem(progressKey(ownerId))
   } catch {
     // Storage unavailable; nothing to remove.
+  }
+}
+
+export function readProgressSyncQueue(ownerId: string): ProgressSyncJob[] {
+  try {
+    const raw = localStorage.getItem(syncQueueKey(ownerId))
+    if (!raw) return []
+    const value = JSON.parse(raw)
+    if (!Array.isArray(value)) return []
+    return value.filter(
+      (job): job is ProgressSyncJob =>
+        isRecord(job) &&
+        typeof job.id === "string" &&
+        job.ownerId === ownerId &&
+        typeof job.createdAt === "string" &&
+        parseProgressData(job.previous) !== null &&
+        parseProgressData(job.next) !== null,
+    )
+  } catch {
+    return []
+  }
+}
+
+export function enqueueProgressSync(
+  ownerId: string,
+  previous: ProgressData,
+  next: ProgressData,
+) {
+  const queue = readProgressSyncQueue(ownerId)
+  const last = queue.at(-1)
+  if (last && JSON.stringify(last.next) === JSON.stringify(next)) return
+  queue.push({
+    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    ownerId,
+    previous,
+    next,
+    createdAt: new Date().toISOString(),
+  })
+  try {
+    localStorage.setItem(
+      syncQueueKey(ownerId),
+      JSON.stringify(queue.slice(-20)),
+    )
+  } catch {
+    // The local progress snapshot remains available if the queue cannot be stored.
+  }
+}
+
+export function removeProgressSyncJob(ownerId: string, jobId: string) {
+  try {
+    const next = readProgressSyncQueue(ownerId).filter(
+      (job) => job.id !== jobId,
+    )
+    localStorage.setItem(syncQueueKey(ownerId), JSON.stringify(next))
+  } catch {
+    // Retry on the next online event if storage is unavailable.
   }
 }

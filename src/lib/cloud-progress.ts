@@ -7,7 +7,11 @@ import {
 } from "firebase/firestore"
 import type { ProgressData, QuizAttempt } from "./progress"
 import { firestore } from "./firebase"
-import { parseProgressData } from "./progress-storage"
+import {
+  parseProgressData,
+  readProgressSyncQueue,
+  removeProgressSyncJob,
+} from "./progress-storage"
 
 type CloudChange = {
   ref: DocumentReference
@@ -92,5 +96,13 @@ export async function saveCloudProgress(
       else if (change.data) batch.set(change.ref, change.data)
     }
     await batch.commit()
+  }
+}
+
+export async function syncQueuedProgress(userId: string) {
+  const queue = readProgressSyncQueue(userId)
+  for (const job of queue) {
+    await saveCloudProgress(userId, job.previous, job.next)
+    removeProgressSyncJob(userId, job.id)
   }
 }

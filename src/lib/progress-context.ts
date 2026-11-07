@@ -10,6 +10,8 @@ export interface ProgressState {
   savedIds: string[]
   /** Consecutive days with a finished quiz, in any course. */
   streak: number
+  syncStatus: "idle" | "syncing" | "synced" | "offline" | "error"
+  retrySync: () => void
   toggleSaved: (questionId: string) => void
   recordAttempt: (attempt: NewQuizAttempt) => void
   /** Removes one course's attempts; bookmarks are kept. */
