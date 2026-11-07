@@ -12,6 +12,8 @@ const questionFields = [
   "explanation",
   "status",
 ]
+const BULK_BATCH_SIZE = 200
+const MAX_IMPORT_ROWS = 1000
 
 function assertId(id) {
   if (
@@ -274,9 +276,11 @@ export async function saveQuestionsWithOperation(
   if (
     !Array.isArray(questions) ||
     questions.length < 1 ||
-    questions.length > 450
+    questions.length > MAX_IMPORT_ROWS
   )
-    throw new Error("Bulk upload must contain between 1 and 450 questions.")
+    throw new Error(
+      `Bulk upload must contain between 1 and ${MAX_IMPORT_ROWS} questions.`,
+    )
   const parentRef = ownerRef(db, owner)
   const entries = questions.map((question, index) => {
     if (question.status !== "draft")
@@ -290,24 +294,21 @@ export async function saveQuestionsWithOperation(
   })
   if (new Set(entries.map((entry) => entry.id)).size !== entries.length)
     throw new Error("The import contains duplicate question IDs.")
-  const operationRef = db.collection("bulkOperations").doc()
-  await db.runTransaction(async (transaction) => {
-    const [parent, ...existing] = await Promise.all([
-      transaction.get(parentRef),
-      ...entries.map((entry) => transaction.get(entry.ref)),
-    ])
-    if (!parent.exists || parent.get("courseId") !== owner.courseId)
-      throw new Error("The question's parent content is missing or changed.")
-    if (existing.some((item) => item.exists))
-      throw new Error(
-        "An imported question ID already exists; no rows were saved.",
-      )
-    for (const entry of entries)
-      transaction.create(entry.ref, {
-        ...entry.data,
-        bulkOperationId: operationRef.id,
-      })
-    transaction.create(operationRef, {
+  const operationRef = metadata.operationId
+    ? db.collection("bulkOperations").doc(metadata.operationId)
+    : db.collection("bulkOperations").doc()
+  const parent = await parentRef.get()
+  if (!parent.exists || parent.get("courseId") !== owner.courseId)
+    throw new Error("The question's parent content is missing or changed.")
+  const existingOperation = await operationRef.get()
+  if (existingOperation.exists) {
+    if (existingOperation.get("type") !== "import")
+      throw new Error("The operation ID belongs to another operation.")
+    if (existingOperation.get("status") === "completed")
+      return { operationId: operationRef.id, status: "completed" }
+  } else {
+    const now = new Date().toISOString()
+    await operationRef.create({
       type: "import",
       sourceType: metadata.sourceType ?? "json",
       fileName: metadata.fileName ?? "import",
@@ -315,35 +316,229 @@ export async function saveQuestionsWithOperation(
       ownerId: owner.id,
       ownerType: owner.type,
       actorId: metadata.actorId ?? null,
-      createdAt: new Date().toISOString(),
-      completedAt: new Date().toISOString(),
+      createdAt: now,
       total: entries.length,
-      succeeded: entries.length,
+      succeeded: 0,
       failed: 0,
       skipped: 0,
       rejected: 0,
       retryable: 0,
-      status: "completed",
+      status: "pending",
       questionIds: entries.map((entry) => entry.id),
-      createdSnapshots: entries.map((entry) => ({
+      rows: entries.map((entry) => ({
+        row: entry.row,
         questionId: entry.id,
         data: entry.data,
       })),
       results: entries.map((entry) => ({
         row: entry.row,
         questionId: entry.id,
-        status: "created",
-        reason: "Question created as draft.",
-        retryable: false,
+        status: "pending",
+        reason: "Waiting for execution.",
+        retryable: true,
       })),
     })
+  }
+  await operationRef.update({
+    status: "processing",
+    startedAt: new Date().toISOString(),
   })
-  return { operationId: operationRef.id }
+  const completedEntries = []
+  let batchNumber = 0
+  try {
+    for (let offset = 0; offset < entries.length; offset += BULK_BATCH_SIZE) {
+      batchNumber += 1
+      const batchEntries = entries.slice(offset, offset + BULK_BATCH_SIZE)
+      const existing = await db.getAll(
+        ...batchEntries.map((entry) => entry.ref),
+      )
+      const completed = existing.filter(
+        (snapshot) =>
+          snapshot.exists &&
+          snapshot.get("bulkOperationId") === operationRef.id,
+      )
+      completedEntries.push(
+        ...batchEntries.filter((entry) =>
+          completed.some((snapshot) => snapshot.id === entry.id),
+        ),
+      )
+      const conflicts = existing.filter(
+        (snapshot) =>
+          snapshot.exists &&
+          snapshot.get("bulkOperationId") !== operationRef.id,
+      )
+      if (conflicts.length > 0) {
+        const conflictIds = new Set(conflicts.map((snapshot) => snapshot.id))
+        const results = entries.map((entry) =>
+          conflictIds.has(entry.id)
+            ? {
+                row: entry.row,
+                questionId: entry.id,
+                status: "failed",
+                reason: "Question ID already exists.",
+                retryable: false,
+              }
+            : null,
+        )
+        await operationRef.update({
+          status: "failed",
+          failed: conflicts.length,
+          retryable: 0,
+          results: results.map(
+            (result, index) =>
+              result ?? {
+                row: entries[index].row,
+                questionId: entries[index].id,
+                status: "pending",
+                reason: "Waiting for retry.",
+                retryable: true,
+              },
+          ),
+        })
+        throw new Error("One or more imported question IDs already exist.")
+      }
+      const batch = db.batch()
+      const newEntries = batchEntries.filter(
+        (entry) => !completed.some((snapshot) => snapshot.id === entry.id),
+      )
+      for (const entry of newEntries)
+        batch.create(entry.ref, {
+          ...entry.data,
+          bulkOperationId: operationRef.id,
+        })
+      await batch.commit()
+      completedEntries.push(...newEntries)
+      const results = entries.map((entry) =>
+        completedEntries.some((item) => item.id === entry.id)
+          ? {
+              row: entry.row,
+              questionId: entry.id,
+              status: "created",
+              reason: "Question created as draft.",
+              retryable: false,
+            }
+          : {
+              row: entry.row,
+              questionId: entry.id,
+              status: "pending",
+              reason: "Waiting for execution.",
+              retryable: true,
+            },
+      )
+      await operationRef.update({
+        status:
+          completedEntries.length === entries.length
+            ? "completed"
+            : "partially_completed",
+        completedAt:
+          completedEntries.length === entries.length
+            ? new Date().toISOString()
+            : null,
+        succeeded: completedEntries.length,
+        failed: 0,
+        retryable: entries.length - completedEntries.length,
+        results,
+        createdSnapshots: completedEntries.map((entry) => ({
+          questionId: entry.id,
+          data: entry.data,
+        })),
+      })
+      if (
+        process.env.FUNCTIONS_EMULATOR === "true" &&
+        Number.isInteger(metadata.failAfterBatch) &&
+        batchNumber === metadata.failAfterBatch
+      )
+        throw new Error("Deterministic test failure after batch completion.")
+    }
+  } catch (error) {
+    await operationRef.update({
+      status: completedEntries.length ? "partially_completed" : "failed",
+      succeeded: completedEntries.length,
+      failed: 0,
+      retryable: entries.length - completedEntries.length,
+      results: entries.map((entry) =>
+        completedEntries.some((item) => item.id === entry.id)
+          ? {
+              row: entry.row,
+              questionId: entry.id,
+              status: "created",
+              reason: "Question created as draft.",
+              retryable: false,
+            }
+          : {
+              row: entry.row,
+              questionId: entry.id,
+              status: "pending",
+              reason: "Eligible for retry.",
+              retryable: true,
+            },
+      ),
+    })
+    throw error
+  }
+  return {
+    operationId: operationRef.id,
+    status: "completed",
+    succeeded: completedEntries.length,
+  }
+}
+
+export async function previewQuestionPublication(db, owner, questionIds) {
+  if (
+    !Array.isArray(questionIds) ||
+    questionIds.length < 1 ||
+    questionIds.length > 450
+  )
+    throw new Error("Select between 1 and 450 questions.")
+  const parent = await ownerRef(db, owner).get()
+  if (!parent.exists || parent.get("courseId") !== owner.courseId)
+    throw new Error("The selected parent content is missing or changed.")
+  const snapshots = await db.getAll(
+    ...questionIds.map((id) => db.collection("questions").doc(id)),
+  )
+  const results = snapshots.map((snapshot) => {
+    if (!snapshot.exists)
+      return {
+        questionId: snapshot.id,
+        eligible: false,
+        errors: ["Question no longer exists."],
+        warnings: [],
+      }
+    const question = snapshot.data()
+    const errors = []
+    const warnings = []
+    const expectedOwner =
+      owner.type === "week" ? question.weekId : question.paperId
+    if (question.courseId !== owner.courseId || expectedOwner !== owner.id)
+      errors.push("Question belongs to another parent.")
+    if (question.status !== "review" && question.status !== "published")
+      errors.push("Question must be submitted for review before publishing.")
+    if (!validQuestion(question)) errors.push("Question is incomplete.")
+    if (!question.explanation?.trim()) warnings.push("Explanation is missing.")
+    if (!question.difficulty?.trim()) warnings.push("Difficulty is missing.")
+    return {
+      questionId: snapshot.id,
+      eligible: errors.length === 0,
+      errors,
+      warnings,
+    }
+  })
+  return {
+    owner,
+    results,
+    eligible: results
+      .filter((result) => result.eligible)
+      .map((result) => result.questionId),
+    blocked: results
+      .filter((result) => !result.eligible)
+      .map((result) => result.questionId),
+  }
 }
 
 export async function rollbackImportOperation(db, operationId) {
   assertId(operationId)
   const operationRef = db.collection("bulkOperations").doc(operationId)
+  await operationRef.update({ status: "rollback_in_progress" })
   await db.runTransaction(async (transaction) => {
     const operation = await transaction.get(operationRef)
     if (!operation.exists)
@@ -407,6 +602,7 @@ export async function updateQuestionsWithOperation(
   const parentRef = ownerRef(db, owner)
   const refs = questionIds.map((id) => db.collection("questions").doc(id))
   const operationRef = db.collection("bulkOperations").doc()
+  const auditRef = db.collection("auditLogs").doc()
   await db.runTransaction(async (transaction) => {
     const parent = await transaction.get(parentRef)
     const snapshots = await Promise.all(refs.map((ref) => transaction.get(ref)))
@@ -478,6 +674,21 @@ export async function updateQuestionsWithOperation(
       })),
       before,
       patch,
+    })
+    transaction.create(auditRef, {
+      action:
+        patch.status === "published"
+          ? "Bulk publish"
+          : patch.status === "draft"
+            ? "Bulk unpublish"
+            : "Bulk edit",
+      resource: `${owner.type}:${owner.id}`,
+      actorId: metadata.actorId ?? null,
+      actorEmail: metadata.actorEmail ?? null,
+      createdAt: new Date().toISOString(),
+      outcome: "success",
+      operationId: operationRef.id,
+      questionIds,
     })
   })
   return { operationId: operationRef.id }

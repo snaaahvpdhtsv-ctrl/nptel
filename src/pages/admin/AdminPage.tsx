@@ -18,7 +18,10 @@ import { StatusBadge } from "../../components/common"
 import { useApp } from "../../lib/app-context"
 import { useAuth } from "../../lib/auth-context"
 import { subscribeToAudit, writeAudit } from "../../lib/cloud-audit"
-import { rollbackImportOperation } from "../../lib/cloud-content"
+import {
+  retryImportQuestionOperation,
+  rollbackImportOperation,
+} from "../../lib/cloud-content"
 import { buildQualityReport } from "../../lib/content-quality"
 import { coursePath } from "../../lib/course-context"
 import type { Course } from "../../lib/data"
@@ -522,6 +525,19 @@ export default function AdminPage() {
                       error instanceof Error
                         ? error.message
                         : "The bulk import could not be rolled back.",
+                      "error",
+                    )
+                  }
+                }}
+                onRetry={async (operation) => {
+                  try {
+                    await retryImportQuestionOperation(operation)
+                    toast("Bulk import retry started")
+                  } catch (error) {
+                    toast(
+                      error instanceof Error
+                        ? error.message
+                        : "The bulk import could not be retried.",
                       "error",
                     )
                   }

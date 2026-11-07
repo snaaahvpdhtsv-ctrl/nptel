@@ -106,5 +106,29 @@ data; never point these commands at a production project.
 - The callable Functions path requires a local Functions emulator or deployed
   Functions configuration; the existing browser harness starts Auth and
   Firestore only.
-- Per-row retryable failures and partial multi-batch execution are not yet
-  exercised because the supported operation remains one bounded transaction.
+- Per-row retryable failures and partial multi-batch execution are covered by
+  the final Functions emulator regression described below.
+## Final publication and recovery verification
+
+The Functions emulator now exposes `previewQuestionPublication` and
+`retryImportQuestionOperation`. Publication preview is server-authoritative:
+it checks parent ownership, review/published state, completeness, and returns
+row-level blocking errors and warnings. The publish mutation repeats those
+checks and writes a trusted `auditLogs` record. The admin application requests
+the preview before publishing, while the callable remains the final
+authorization and validation boundary.
+
+Operation imports use 200-row Firestore batches (maximum 1,000 rows) and
+persist `pending`, `processing`, `partially_completed`, `completed`, and
+`failed` states with per-row results. A deterministic `failAfterBatch` hook is
+accepted only by the Functions emulator for recovery tests. Retry requests
+reuse the original operation ID, skip rows already tagged with that operation,
+and never duplicate successful records. Rollback marks
+`rollback_in_progress`, removes only unchanged operation-owned records, and
+preserves conflicts. Multi-batch imports are therefore recoverable but not
+atomic across batches.
+
+The callable regression runner verifies admin publication preview, blocked
+draft publication, learner-visible published content, guest visibility after
+unpublish, trusted publication audit records, a 401-row two-plus-batch import,
+deterministic partial failure, retry, repeated retry idempotency, and rollback.

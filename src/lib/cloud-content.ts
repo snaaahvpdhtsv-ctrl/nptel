@@ -27,7 +27,13 @@ export interface CloudContent {
   questions: Record<string, AdminQuestion[]>
 }
 
-export type BulkOperationStatus = "completed" | "partial" | "failed" | "rolled_back"
+export type BulkOperationStatus = "pending" | "processing" | "partially_completed" | "completed" | "failed" | "rollback_in_progress" | "rolled_back" | "rolled_back_with_conflicts"
+
+export interface BulkOperationRow {
+  row: number
+  questionId: string
+  data: AdminQuestion
+}
 
 export type BulkOperation = {
   id: string
@@ -51,10 +57,11 @@ export type BulkOperation = {
   results: Array<{
     row: number
     questionId?: string
-    status: "created" | "updated" | "rejected" | "skipped" | "failed"
+    status: "pending" | "created" | "updated" | "rejected" | "skipped" | "failed"
     reason: string
     retryable: boolean
   }>
+  rows?: BulkOperationRow[]
 }
 
 const asStatus = (value: unknown): Status =>
@@ -503,6 +510,33 @@ export async function updateQuestionOperation(
   return result.data as { operationId: string }
 }
 
+export async function previewQuestionPublication(
+  owner: {
+    id: string
+    courseId: string
+    type: "week" | "paper"
+  },
+  questionIds: string[],
+) {
+  if (!firebaseFunctions)
+    throw new Error("Trusted bulk content service is not configured.")
+  const callable = httpsCallable(
+    firebaseFunctions,
+    "previewQuestionPublication",
+  )
+  const result = await callable({ owner, questionIds })
+  return result.data as {
+    eligible: string[]
+    blocked: string[]
+    results: Array<{
+      questionId: string
+      eligible: boolean
+      errors: string[]
+      warnings: string[]
+    }>
+  }
+}
+
 export async function rollbackImportOperation(operationId: string) {
   if (!firebaseFunctions)
     throw new Error("Trusted bulk content service is not configured.")
@@ -515,6 +549,35 @@ export async function rollbackImportOperation(operationId: string) {
     operationId: string
     status: "rolled_back" | "rolled_back_with_conflicts"
     conflicts?: string[]
+  }
+}
+
+export async function retryImportQuestionOperation(operation: BulkOperation) {
+  if (!firebaseFunctions)
+    throw new Error("Trusted bulk content service is not configured.")
+  if (!operation.rows?.length)
+    throw new Error("This operation has no persisted rows available to retry.")
+  const callable = httpsCallable(
+    firebaseFunctions,
+    "retryImportQuestionOperation",
+  )
+  const questions = operation.rows.map(({ questionId, data }) => ({
+    ...data,
+    id: questionId,
+    status: "draft" as const,
+  }))
+  const result = await callable({
+    owner: {
+      id: operation.ownerId,
+      courseId: operation.courseId,
+      type: operation.ownerType,
+    },
+    questions,
+    metadata: { operationId: operation.id },
+  })
+  return result.data as {
+    operationId: string
+    status: BulkOperationStatus
   }
 }
 

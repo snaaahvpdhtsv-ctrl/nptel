@@ -11,6 +11,7 @@ import {
   saveQuestionsWithOperation,
   updateQuestionsWithOperation,
   rollbackImportOperation,
+  previewQuestionPublication as getPublicationPreview,
   saveWeek,
 } from "./content-service.mjs"
 
@@ -34,7 +35,7 @@ function callable(operation) {
     async (request) => {
       requireAdmin(request)
       try {
-        return await operation(request.data)
+        return await operation(request.data, request)
       } catch (error) {
         if (error instanceof HttpsError) throw error
         throw new HttpsError(
@@ -58,15 +59,30 @@ export const importQuestionContent = callable(({ owner, questions }) =>
   saveQuestions(db, owner, questions),
 )
 export const importQuestionOperation = callable(
-  ({ owner, questions, metadata }) =>
+  ({ owner, questions, metadata }, request) =>
     saveQuestionsWithOperation(db, owner, questions, {
       ...metadata,
+      actorId: request.auth.uid,
+      actorEmail: request.auth.token.email ?? null,
     }),
 )
 export const updateQuestionOperation = callable(
-  ({ owner, questionIds, patch, metadata }) =>
+  ({ owner, questionIds, patch, metadata }, request) =>
     updateQuestionsWithOperation(db, owner, questionIds, patch, {
       ...metadata,
+      actorId: request.auth.uid,
+      actorEmail: request.auth.token.email ?? null,
+    }),
+)
+export const previewQuestionPublication = callable(({ owner, questionIds }) =>
+  getPublicationPreview(db, owner, questionIds),
+)
+export const retryImportQuestionOperation = callable(
+  ({ owner, questions, metadata }, request) =>
+    saveQuestionsWithOperation(db, owner, questions, {
+      ...metadata,
+      actorId: request.auth.uid,
+      actorEmail: request.auth.token.email ?? null,
     }),
 )
 export const rollbackImportOperationContent = callable(({ operationId }) =>

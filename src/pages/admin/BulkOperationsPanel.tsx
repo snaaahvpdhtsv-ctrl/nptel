@@ -6,9 +6,11 @@ import { downloadFile, smallOutline, smallPrimary } from "./ui"
 export function BulkOperationsPanel({
   operations,
   onRollback,
+  onRetry,
 }: {
   operations: BulkOperation[]
   onRollback: (operation: BulkOperation) => Promise<void>
+  onRetry: (operation: BulkOperation) => Promise<void>
 }) {
   const [query, setQuery] = useState("")
   const filtered = useMemo(() => {
@@ -86,13 +88,22 @@ export function BulkOperationsPanel({
                     <Download size={14} /> Report
                   </button>
                   {operation.type === "import" &&
-                    operation.status === "completed" && (
+                    (operation.status === "completed" ||
+                      operation.status === "partially_completed" ||
+                      operation.status === "failed") && (
                       <button
                         type="button"
                         className={smallPrimary}
-                        onClick={() => void onRollback(operation)}
+                        onClick={() =>
+                          void (operation.status === "completed"
+                            ? onRollback(operation)
+                            : onRetry(operation))
+                        }
                       >
-                        <RotateCcw size={14} /> Roll back
+                        <RotateCcw size={14} />{" "}
+                        {operation.status === "completed"
+                          ? "Roll back"
+                          : "Retry"}
                       </button>
                     )}
                 </div>

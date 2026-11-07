@@ -68,6 +68,13 @@ violations across 23 WCAG 2A/2AA rules, and the browser benchmark covered 100,
 verification remain outside scope. See
 `reports/CONTENT_QUALITY_DASHBOARD_QA.md`.
 
-The repository does not define an axe, component-test, Functions-emulator, or
-production-authentication test runner. Those areas remain explicitly
-unverified rather than being reported as passed.
+The repository now defines axe and Functions-emulator runners. Production
+authentication and production deployment verification remain outside scope.
+### Resolved: publication and multi-batch recovery gap
+
+The previous gap in callable-backed publication and retryable imports is
+resolved in the local emulator scope. Publication now has a server-side
+preview and trusted audit entry. Imports execute in bounded batches with
+stable operation IDs, progress states, deterministic emulator failure
+injection, idempotent retry, and conflict-aware rollback. Production
+deployment and production-data verification remain out of scope.

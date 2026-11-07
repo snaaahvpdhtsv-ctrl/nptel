@@ -31,6 +31,7 @@ import {
   archiveQuestion as archiveCloudQuestion,
   bulkUpdateQuestions as bulkUpdateCloudQuestions,
   updateQuestionOperation,
+  previewQuestionPublication,
   archiveWeek as archiveCloudWeek,
   isValidQuestion,
   newContentId,
@@ -444,9 +445,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const useTrustedService =
         !import.meta.env.DEV ||
         Boolean(import.meta.env.VITE_FIREBASE_FUNCTIONS_EMULATOR_HOST)
-      if (useTrustedService)
+      if (useTrustedService) {
+        if (patch.status === "published") {
+          const preview = await previewQuestionPublication(owner, questionIds)
+          if (preview.blocked.length > 0)
+            throw new Error(
+              `Publication blocked for ${preview.blocked.length} question${
+                preview.blocked.length === 1 ? "" : "s"
+              }. Review the content-quality findings first.`,
+            )
+        }
         await updateQuestionOperation(owner, questionIds, patch)
-      else await bulkUpdateCloudQuestions(owner, selected, patch)
+      } else await bulkUpdateCloudQuestions(owner, selected, patch)
       const next = current.map((question) =>
         questionIds.includes(question.id)
           ? {

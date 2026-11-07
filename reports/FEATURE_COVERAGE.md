@@ -24,6 +24,9 @@
 | Admin dashboard | Yes | Authenticated CRUD E2E | Emulator writes | Admin claim and route guard | Not fully | VERIFIED |
 | Auth email/Google | Sign-in UI | Email sign-in exercised by admin/learner E2E; Google blocked | Emulator auth | Claim rules | UI only | PARTIALLY VERIFIED |
 
+| Callable publication preview and learner visibility | VERIFIED | Functions emulator test covers server readiness checks, guest Firestore visibility, unpublish isolation, and trusted audit logging |
+| Multi-batch import recovery | VERIFIED | Functions emulator test covers 401 rows, deterministic post-batch failure, resumable retry, repeated retry, and rollback; consistency is recoverable, not atomic |
+
 `VERIFIED` is limited to the exact emulator/browser behavior listed in the
 evidence. Production writes, deployment, and live-account testing were not
 performed.

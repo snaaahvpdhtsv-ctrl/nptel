@@ -107,8 +107,15 @@ inventory evidence.
 
 ## Required next fixes before full acceptance
 
-1. Add dedicated axe, component, and Functions emulator suites.
+1. Add component and mobile-specific suites.
 2. Expand authenticated browser coverage to the remaining admin panels.
 3. Perform separately authorized production read-only verification.
-4. Add full Playwright bulk-import, bulk-edit, publication, rollback-conflict,
-   and mobile coverage with the Functions emulator enabled.
+
+### Final Bulk Content Management verification
+
+Callable publication preview, publication authorization, trusted audit
+logging, guest learner visibility, bulk unpublishing, multi-batch partial
+failure recovery, retry idempotency, and partial-operation rollback are
+verified against the Auth, Firestore, and Functions emulators. The import
+workflow is intentionally recoverable rather than globally atomic: each
+200-row batch commits independently and operation history records progress.
