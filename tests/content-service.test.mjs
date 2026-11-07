@@ -8,6 +8,9 @@ import {
   saveQuestion,
   saveWeek,
   saveQuestions,
+  saveQuestionsWithOperation,
+  updateQuestionsWithOperation,
+  rollbackImportOperation,
 } from "../functions/content-service.mjs"
 
 const app =
@@ -87,5 +90,51 @@ test("bulk imports reject empty lists and duplicate IDs without writes", async (
   assert.equal(
     (await db.collection("questions").doc("duplicate").get()).exists,
     false,
+  )
+})
+
+test("trusted bulk operations record imports and enforce publish readiness", async () => {
+  const operationOwner = { id: "week-1", courseId: "course-1", type: "week" }
+  const imported = {
+    ...question,
+    id: "operation-question",
+    status: "draft",
+  }
+  const result = await saveQuestionsWithOperation(
+    db,
+    operationOwner,
+    [imported],
+    { sourceType: "json", fileName: "questions.json", actorId: "admin-1" },
+  )
+  assert.ok(result.operationId)
+  const operation = await db
+    .collection("bulkOperations")
+    .doc(result.operationId)
+    .get()
+  assert.equal(operation.get("status"), "completed")
+  assert.deepEqual(operation.get("questionIds"), ["operation-question"])
+
+  await assert.rejects(
+    () =>
+      updateQuestionsWithOperation(
+        db,
+        operationOwner,
+        ["operation-question"],
+        { status: "published" },
+        { actorId: "admin-1" },
+      ),
+    /submitted for review/,
+  )
+  await rollbackImportOperation(db, result.operationId)
+  assert.equal(
+    (await db.collection("questions").doc("operation-question").get()).exists,
+    false,
+  )
+  await rollbackImportOperation(db, result.operationId)
+  assert.equal(
+    (await db.collection("bulkOperations").doc(result.operationId).get()).get(
+      "status",
+    ),
+    "rolled_back",
   )
 })

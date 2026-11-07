@@ -11,6 +11,7 @@
     "test:rules": "firebase emulators:exec --only firestore --project demo-nptel \"node --test tests/firestore.rules.test.mjs\"",
     "test:content-service": "firebase emulators:exec --only firestore --project demo-nptel \"node --test tests/content-service.test.mjs\"",
     "test:content-quality": "node --experimental-strip-types --test tests/content-quality.test.mjs",
+    "test:bulk-content": "node --experimental-strip-types --test tests/bulk-content.test.mjs",
     "test:accessibility": "node tests/accessibility.e2e.mjs",
     "test:performance": "node tests/performance.e2e.mjs",
     "test:e2e:admin": "node tests/admin.e2e.mjs",

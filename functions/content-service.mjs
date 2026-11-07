@@ -248,6 +248,198 @@ export async function saveQuestions(db, owner, questions) {
   })
 }
 
+export async function saveQuestionsWithOperation(
+  db,
+  owner,
+  questions,
+  metadata = {},
+) {
+  if (
+    !Array.isArray(questions) ||
+    questions.length < 1 ||
+    questions.length > 450
+  )
+    throw new Error("Bulk upload must contain between 1 and 450 questions.")
+  const parentRef = ownerRef(db, owner)
+  const entries = questions.map((question, index) => {
+    if (question.status !== "draft")
+      throw new Error("Bulk imports are saved as drafts for review.")
+    return {
+      row: index + 1,
+      id: question.id,
+      ref: db.collection("questions").doc(question.id),
+      data: normalizedQuestion(owner, question),
+    }
+  })
+  if (new Set(entries.map((entry) => entry.id)).size !== entries.length)
+    throw new Error("The import contains duplicate question IDs.")
+  const operationRef = db.collection("bulkOperations").doc()
+  await db.runTransaction(async (transaction) => {
+    const [parent, ...existing] = await Promise.all([
+      transaction.get(parentRef),
+      ...entries.map((entry) => transaction.get(entry.ref)),
+    ])
+    if (!parent.exists || parent.get("courseId") !== owner.courseId)
+      throw new Error("The question's parent content is missing or changed.")
+    if (existing.some((item) => item.exists))
+      throw new Error(
+        "An imported question ID already exists; no rows were saved.",
+      )
+    for (const entry of entries)
+      transaction.create(entry.ref, {
+        ...entry.data,
+        bulkOperationId: operationRef.id,
+      })
+    transaction.create(operationRef, {
+      type: "import",
+      sourceType: metadata.sourceType ?? "json",
+      fileName: metadata.fileName ?? "import",
+      courseId: owner.courseId,
+      ownerId: owner.id,
+      ownerType: owner.type,
+      actorId: metadata.actorId ?? null,
+      createdAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      total: entries.length,
+      succeeded: entries.length,
+      failed: 0,
+      skipped: 0,
+      rejected: 0,
+      retryable: 0,
+      status: "completed",
+      questionIds: entries.map((entry) => entry.id),
+      results: entries.map((entry) => ({
+        row: entry.row,
+        questionId: entry.id,
+        status: "created",
+        reason: "Question created as draft.",
+        retryable: false,
+      })),
+    })
+  })
+  return { operationId: operationRef.id }
+}
+
+export async function rollbackImportOperation(db, operationId) {
+  assertId(operationId)
+  const operationRef = db.collection("bulkOperations").doc(operationId)
+  await db.runTransaction(async (transaction) => {
+    const operation = await transaction.get(operationRef)
+    if (!operation.exists)
+      throw new Error("The bulk operation no longer exists.")
+    if (operation.get("type") !== "import")
+      throw new Error("Only import operations can be rolled back.")
+    if (operation.get("status") === "rolled_back") return
+    const questionIds = operation.get("questionIds") ?? []
+    const questions = await Promise.all(
+      questionIds.map((id) =>
+        transaction.get(db.collection("questions").doc(id)),
+      ),
+    )
+    questions.forEach((question) => {
+      if (question.exists && question.get("bulkOperationId") === operationId)
+        transaction.delete(question.ref)
+    })
+    transaction.update(operationRef, {
+      status: "rolled_back",
+      rolledBackAt: new Date().toISOString(),
+    })
+  })
+  return { operationId, status: "rolled_back" }
+}
+
+export async function updateQuestionsWithOperation(
+  db,
+  owner,
+  questionIds,
+  patch,
+  metadata = {},
+) {
+  if (
+    !Array.isArray(questionIds) ||
+    questionIds.length < 1 ||
+    questionIds.length > 450
+  )
+    throw new Error("Select between 1 and 450 questions.")
+  const parentRef = ownerRef(db, owner)
+  const refs = questionIds.map((id) => db.collection("questions").doc(id))
+  const operationRef = db.collection("bulkOperations").doc()
+  await db.runTransaction(async (transaction) => {
+    const parent = await transaction.get(parentRef)
+    const snapshots = await Promise.all(refs.map((ref) => transaction.get(ref)))
+    if (!parent.exists || parent.get("courseId") !== owner.courseId)
+      throw new Error("The selected parent content is missing or changed.")
+    if (snapshots.some((snapshot) => !snapshot.exists))
+      throw new Error("One or more selected questions no longer exists.")
+    const before = snapshots.map((snapshot) => snapshot.data())
+    const next = snapshots.map((snapshot) => ({ ...snapshot.data(), ...patch }))
+    if (patch.status === "published") {
+      if (next.some((question) => !validQuestion(question)))
+        throw new Error("Incomplete questions cannot be published.")
+      if (
+        before.some(
+          (question) =>
+            question.status !== "review" && question.status !== "published",
+        )
+      )
+        throw new Error(
+          "Questions must be submitted for review before publishing.",
+        )
+    }
+    snapshots.forEach((snapshot, index) => {
+      const current = snapshot.data()
+      const expectedOwner =
+        owner.type === "week" ? current.weekId : current.paperId
+      if (current.courseId !== owner.courseId || expectedOwner !== owner.id)
+        throw new Error("A selected question belongs to another parent.")
+      transaction.update(
+        refs[index],
+        clean({
+          ...patch,
+          contentReady:
+            patch.status === "published"
+              ? validQuestion(next[index])
+              : patch.status
+                ? false
+                : current.contentReady,
+        }),
+      )
+    })
+    transaction.create(operationRef, {
+      type:
+        patch.status === "published"
+          ? "publish"
+          : patch.status === "draft"
+            ? "unpublish"
+            : "edit",
+      courseId: owner.courseId,
+      ownerId: owner.id,
+      ownerType: owner.type,
+      actorId: metadata.actorId ?? null,
+      createdAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      total: refs.length,
+      succeeded: refs.length,
+      failed: 0,
+      skipped: 0,
+      rejected: 0,
+      retryable: 0,
+      status: "completed",
+      questionIds,
+      results: questionIds.map((id) => ({
+        row: 0,
+        questionId: id,
+        status: "updated",
+        reason: "Bulk update completed.",
+        retryable: false,
+      })),
+      before,
+      patch,
+    })
+  })
+  return { operationId: operationRef.id }
+}
+
 export async function archiveQuestion(db, owner, questionId) {
   const parentRef = ownerRef(db, owner)
   const questionRef = db.collection("questions").doc(questionId)

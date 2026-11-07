@@ -12,6 +12,11 @@ import {
   getFirestore,
   type Firestore,
 } from "firebase/firestore"
+import {
+  connectFunctionsEmulator,
+  getFunctions,
+  type Functions,
+} from "firebase/functions"
 import { recordAuthDiagnostic } from "./auth-diagnostics"
 
 const config = {
@@ -87,6 +92,9 @@ if (app) {
 export const firebaseApp = app
 export const firebaseAuth = authInstance
 export const firestore = app ? getFirestore(app) : null
+export const firebaseFunctions: Functions | null = app
+  ? getFunctions(app)
+  : null
 
 recordAuthDiagnostic("firebase.auth.initialized", {
   available: Boolean(firebaseAuth),
@@ -114,5 +122,16 @@ if (import.meta.env.DEV && firestore) {
       throw new Error(
         "VITE_FIREBASE_FIRESTORE_EMULATOR_HOST must be formatted as host:port.",
       )
+  }
+
+  if (import.meta.env.DEV && firebaseFunctions) {
+    const functionsEmulatorHost = import.meta.env
+      .VITE_FIREBASE_FUNCTIONS_EMULATOR_HOST
+    if (functionsEmulatorHost) {
+      const [host, rawPort] = functionsEmulatorHost.split(":")
+      const port = Number(rawPort)
+      if (host && Number.isInteger(port) && port > 0)
+        connectFunctionsEmulator(firebaseFunctions, host, port)
+    }
   }
 }

@@ -41,6 +41,17 @@ now explicitly identifies the remaining assignment as session-only.
 
 ## Remaining limitations
 
+## Bulk content management
+
+The bulk-management increment adds standalone JSON question import, complete
+row-level preview, shared validation, bounded bulk actions, trusted callable
+operation tracking, admin-only operation history, and idempotent rollback for
+operation-owned imports. Parser, trusted content-service, and Firestore rules
+tests pass locally. The feature remains **PARTIALLY VERIFIED** because the
+Functions-emulator Playwright journeys for JSON/CSV import, bulk editing,
+publication visibility, rollback conflicts, and retry behavior are not yet
+automated.
+
 ## Independent content-quality dashboard audit
 
 The dashboard audit at `a7965e2` found and fixed five issues: published

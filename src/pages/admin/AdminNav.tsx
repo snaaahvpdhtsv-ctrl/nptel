@@ -8,10 +8,11 @@ import {
   Megaphone,
   MessageSquareText,
   ShieldCheck,
+  ClipboardList,
 } from "lucide-react"
 import type { IconType } from "./ui"
 
-export type SectionId = "overview" | "weeks" | "papers" | "courses" | "quality" | "requests" | "announcement" | "audit"
+export type SectionId = "overview" | "weeks" | "papers" | "courses" | "quality" | "requests" | "bulk" | "announcement" | "audit"
 
 interface SectionMeta {
   label: string
@@ -50,6 +51,11 @@ export const SECTIONS: Record<SectionId, SectionMeta> = {
     icon: MessageSquareText,
     iconClass: "from-primary-600 to-indigo-500",
   },
+  bulk: {
+    label: "Bulk operations",
+    icon: ClipboardList,
+    iconClass: "from-cyan-500 to-blue-500",
+  },
   announcement: {
     label: "Announcement",
     icon: Megaphone,
@@ -82,7 +88,7 @@ const NAV_GROUPS: NavGroup[] = [
   { label: "Course content", ids: ["weeks", "papers"] },
   {
     label: "Site-wide",
-    ids: ["courses", "quality", "requests", "announcement", "audit"],
+    ids: ["courses", "quality", "requests", "bulk", "announcement", "audit"],
   },
 ]
 

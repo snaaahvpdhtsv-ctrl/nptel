@@ -29,6 +29,8 @@ import {
   archiveCourse as archiveCloudCourse,
   archivePaper as archiveCloudPaper,
   archiveQuestion as archiveCloudQuestion,
+  bulkUpdateQuestions as bulkUpdateCloudQuestions,
+  updateQuestionOperation,
   archiveWeek as archiveCloudWeek,
   isValidQuestion,
   newContentId,
@@ -39,6 +41,8 @@ import {
   saveQuestions as saveCloudQuestions,
   saveWeek as saveCloudWeek,
   subscribeToContent,
+  subscribeToBulkOperations,
+  type BulkOperation,
 } from "./cloud-content"
 import { firestore } from "./firebase"
 import {
@@ -115,6 +119,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [papers, setPapers] = useState<Paper[]>([])
   const [adminQuestions, setAdminQuestions] =
     useState<Record<string, AdminQuestion[]>>({})
+  const [bulkOperations, setBulkOperations] = useState<BulkOperation[]>([])
   const [contentLoading, setContentLoading] = useState(Boolean(firestore))
   const [contentError, setContentError] = useState<string | null>(
     firestore
@@ -191,6 +196,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
     )
   }, [adminClaimsLoading, authLoading, user?.role])
+
+  useEffect(() => {
+    if (
+      !firestore ||
+      authLoading ||
+      adminClaimsLoading ||
+      user?.role !== "admin"
+    ) {
+      setBulkOperations([])
+      return
+    }
+    return subscribeToBulkOperations(setBulkOperations, (error) =>
+      toast(
+        `Bulk operation history could not be loaded: ${error.message}`,
+        "error",
+      ),
+    )
+  }, [adminClaimsLoading, authLoading, toast, user?.role])
 
   useEffect(() => {
     if (!firestore || authLoading || adminClaimsLoading || !user) {
@@ -370,6 +393,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ? { ...question, status: "archived" as const }
           : question,
       )
+
       requirePublishedQuestion(owner, next, weeks, papers)
       const parent =
         owner.type === "week"
@@ -399,6 +423,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [adminQuestions, papers, weeks],
   )
 
+  const bulkUpdateQuestions = useCallback(
+    async (
+      owner: { id: string courseId: string type: "week" | "paper" },
+      questionIds: string[],
+      patch: Partial<Pick<AdminQuestion, "difficulty" | "topic" | "explanation" | "status">>,
+    ) => {
+      const current = adminQuestions[owner.id] ?? []
+      const selected = current.filter((question) =>
+        questionIds.includes(question.id),
+      )
+      if (selected.length !== questionIds.length)
+        throw new Error(
+          "One or more selected questions are no longer available.",
+        )
+      const useTrustedService =
+        !import.meta.env.DEV ||
+        Boolean(import.meta.env.VITE_FIREBASE_FUNCTIONS_EMULATOR_HOST)
+      if (useTrustedService)
+        await updateQuestionOperation(owner, questionIds, patch)
+      else await bulkUpdateCloudQuestions(owner, selected, patch)
+      const next = current.map((question) =>
+        questionIds.includes(question.id)
+          ? {
+              ...question,
+              ...patch,
+              contentReady:
+                patch.status === "published"
+                  ? isValidQuestion({ ...question, ...patch })
+                  : patch.status
+                    ? false
+                    : question.contentReady,
+            }
+          : question,
+      )
+      setAdminQuestions((lists) => ({ ...lists, [owner.id]: next }))
+      const questionCount = next.filter(
+        (question) =>
+          question.status === "published" && isValidQuestion(question),
+      ).length
+      setWeeks((items) =>
+        items.map((item) =>
+          item.id === owner.id ? { ...item, questionCount } : item,
+        ),
+      )
+      setPapers((items) =>
+        items.map((item) =>
+          item.id === owner.id ? { ...item, questionCount } : item,
+        ),
+      )
+    },
+    [adminQuestions],
+  )
+
   const value = useMemo<AppState>(
     () => ({
       dark,
@@ -420,6 +497,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       adminQuestions,
       saveQuestion,
       saveQuestions,
+      bulkUpdateQuestions,
+      bulkOperations,
       archiveQuestion,
       newQuestionId,
       newContentId,
@@ -450,6 +529,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       adminQuestions,
       saveQuestion,
       saveQuestions,
+      bulkUpdateQuestions,
+      bulkOperations,
       archiveQuestion,
       newContentId,
       questionBank,

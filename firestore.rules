@@ -313,6 +313,11 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /bulkOperations/{operationId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

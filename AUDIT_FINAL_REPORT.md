@@ -50,6 +50,7 @@ remain outside scope. The detailed findings are in
 | Auth flows | Sign-in UI | Dedicated E2E unavailable | Source only | Claim rules | UI only | BLOCKED |
 | Admin dashboard | Authenticated E2E | Course/week CRUD and guard | Emulator writes | Claim rules | Not full | VERIFIED |
 | Content quality dashboard | Yes | Diagnostics 6/6; admin E2E; accessibility; 100/500/1000 browser benchmark | Emulator-backed admin snapshots; 11 observed emulator requests | Claim-only access and signed-out guard | 390px rendered audit | VERIFIED |
+| Bulk content management | JSON/CSV preview, selection, operation history UI | Parser 3/3; content service 3/3; rules 12/12 | Trusted callable service and admin-only operation records | Parent ownership, draft isolation, operation write denial | Source only | PARTIALLY VERIFIED |
 
 ## Defects and gaps
 
@@ -63,8 +64,9 @@ remaining test-infrastructure limitations are recorded in
 
 | Check | Result |
 |---|---|
-| `npm run test:rules` | PASS — 11/11 emulator tests |
-| `npm run test:content-service` | PASS — 2/2 tests |
+| `npm run test:rules` | PASS — 12/12 emulator tests |
+| `npm run test:content-service` | PASS — 3/3 tests |
+| `npm run test:bulk-content` | PASS — 3/3 parser tests |
 | `npm run test:e2e:admin` | PASS — authenticated admin CRUD and guard |
 | `npm run test:e2e:learner` | PASS — PYQ practice and feedback persistence |
 | TypeScript | PASS |
@@ -108,3 +110,5 @@ inventory evidence.
 1. Add dedicated axe, component, and Functions emulator suites.
 2. Expand authenticated browser coverage to the remaining admin panels.
 3. Perform separately authorized production read-only verification.
+4. Add full Playwright bulk-import, bulk-edit, publication, rollback-conflict,
+   and mobile coverage with the Functions emulator enabled.

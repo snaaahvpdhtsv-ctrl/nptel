@@ -24,7 +24,16 @@ import {
 } from "lucide-react"
 import { StatusBadge, difficultyClass } from "../../components/common"
 import { useApp } from "../../lib/app-context"
-import { isValidQuestion, restoreWeekBackup } from "../../lib/cloud-content"
+import {
+  importQuestionOperation,
+  isValidQuestion,
+  restoreWeekBackup,
+} from "../../lib/cloud-content"
+import {
+  parseQuestionImport,
+  previewCounts,
+  type ImportPreview,
+} from "../../lib/bulk-content"
 import {
   type AdminQuestion,
   type Course,
@@ -285,17 +294,23 @@ function BulkUpload({
   onClose,
 }: {
   existing: AdminQuestion[]
-  onImport: (rows: AdminQuestion[]) => Promise<void>
+  onImport: (
+    rows: AdminQuestion[],
+    sourceType: "csv" | "json",
+    fileName: string,
+  ) => Promise<void>
   onClose: () => void
 }) {
   const { toast } = useApp()
   const inputRef = useRef<HTMLInputElement>(null)
+  const jsonInputRef = useRef<HTMLInputElement>(null)
   const [csvInfoOpen, setCsvInfoOpen] = useState(false)
   const [result, setResult] = useState<{
     fileName: string
     valid: AdminQuestion[]
     errors: CsvIssue[]
   } | null>(null)
+  const [jsonPreview, setJsonPreview] = useState<ImportPreview | null>(null)
 
   const csvInfoText = `CSV upload format
 
@@ -329,6 +344,33 @@ Example row:
         "This CSV file couldn't be read. Check its encoding.",
         "error",
       )
+    }
+
+    const handleJsonFile = async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      event.target.value = ""
+      if (!file) return
+      if (file.size > 5 * 1024 * 1024)
+        return toast("File too large — maximum 5 MB", "error")
+      if (!/\.json$/i.test(file.name))
+        return toast("Choose a JSON file for question import", "error")
+      try {
+        setJsonPreview(
+          parseQuestionImport(
+            await file.text(),
+            file.name,
+            existing,
+            (row) => `import-${Date.now()}-${row}`,
+          ),
+        )
+      } catch (error) {
+        toast(
+          error instanceof Error
+            ? error.message
+            : "The JSON file could not be read.",
+          "error",
+        )
+      }
     }
     if (rows.length < 2) return toast("No rows found in file", "error")
     if (rows.length - 1 > 450)
@@ -508,6 +550,22 @@ Example row:
             <Upload size={15} />
             Upload CSV file
           </button>
+          <input
+            ref={jsonInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="sr-only"
+            onChange={handleJsonFile}
+            aria-label="Upload JSON question file"
+            tabIndex={-1}
+          />
+          <button
+            onClick={() => jsonInputRef.current?.click()}
+            className={smallOutline}
+          >
+            <Upload size={15} />
+            Upload JSON file
+          </button>
           <button
             type="button"
             onClick={() => setCsvInfoOpen(true)}
@@ -598,6 +656,111 @@ Example row:
                     issues.
                   </p>
                 )}
+                {jsonPreview && (
+                  <div className="mt-3 space-y-3 rounded-lg border border-gray-200 p-3 dark:border-white/10">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-gray-800 dark:text-white">
+                          JSON preview — {jsonPreview.fileName}
+                        </p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                          {(() => {
+                            const counts = previewCounts(jsonPreview)
+                            return `${counts.total} parsed · ${counts.valid} valid · ${counts.invalid} invalid · ${counts.duplicate} duplicates · ${counts.warnings} warnings`
+                          })()}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className={smallOutline}
+                        onClick={() => setJsonPreview(null)}
+                      >
+                        Choose another file
+                      </button>
+                    </div>
+                    <div className="max-h-80 overflow-auto rounded-md border border-gray-200 dark:border-white/10">
+                      <table className="min-w-full text-left text-xs">
+                        <thead className="border-b border-gray-200 dark:border-white/10">
+                          <tr>
+                            <th className="px-2 py-2">Row</th>
+                            <th className="px-2 py-2">Question</th>
+                            <th className="px-2 py-2">Status</th>
+                            <th className="px-2 py-2">Details</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {jsonPreview.rows.map((row) => {
+                            const invalid = row.issues.some(
+                              (issue) => issue.severity === "error",
+                            )
+                            return (
+                              <tr
+                                key={row.row}
+                                className="border-b border-gray-100 align-top last:border-0 dark:border-white/5"
+                              >
+                                <td className="whitespace-nowrap px-2 py-2">
+                                  {row.row}
+                                </td>
+                                <td className="max-w-[22rem] px-2 py-2">
+                                  <p className="font-medium text-gray-800 dark:text-gray-100">
+                                    {row.question.questionText ||
+                                      "Missing question text"}
+                                  </p>
+                                  <p className="mt-1 text-gray-500">
+                                    {row.question.options.join(" · ")}
+                                  </p>
+                                </td>
+                                <td className="whitespace-nowrap px-2 py-2">
+                                  <span
+                                    className={
+                                      invalid
+                                        ? "text-red-600"
+                                        : row.issues.length
+                                          ? "text-amber-600"
+                                          : "text-green-600"
+                                    }
+                                  >
+                                    {invalid
+                                      ? "Invalid"
+                                      : row.issues.length
+                                        ? "Warning"
+                                        : "Ready"}
+                                  </span>
+                                </td>
+                                <td className="max-w-[20rem] px-2 py-2">
+                                  {row.issues.length
+                                    ? row.issues
+                                        .map((issue) => issue.message)
+                                        .join(" ")
+                                    : "Will be imported as draft."}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={previewCounts(jsonPreview).ready === 0}
+                      className={smallPrimary}
+                      onClick={async () => {
+                        const valid = jsonPreview.rows
+                          .filter(
+                            (row) =>
+                              !row.issues.some(
+                                (issue) => issue.severity === "error",
+                              ),
+                          )
+                          .map((row) => row.question)
+                        await onImport(valid, "json", jsonPreview.fileName)
+                        setJsonPreview(null)
+                      }}
+                    >
+                      Import valid JSON rows
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -617,7 +780,7 @@ Example row:
             <button
               disabled={result.valid.length === 0}
               onClick={async () => {
-                await onImport(result.valid)
+                await onImport(result.valid, "csv", result.fileName)
                 setResult(null)
               }}
               className={smallPrimary}
@@ -766,6 +929,7 @@ export function QuestionList({
     adminQuestions,
     saveQuestion,
     saveQuestions,
+    bulkUpdateQuestions,
     archiveQuestion,
     newQuestionId,
     toast,
@@ -824,6 +988,9 @@ export function QuestionList({
       statusFilter === "all" || question.status === statusFilter
     return matchesText && matchesDifficulty && matchesStatus
   })
+  const allFilteredSelected =
+    filteredQuestions.length > 0 &&
+    filteredQuestions.every((question) => selectedIds.has(question.id))
   const persistQuestion = async (question: AdminQuestion) => {
     try {
       await saveQuestion(owner, question)
@@ -962,6 +1129,29 @@ export function QuestionList({
             </select>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600 dark:text-gray-400">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={allFilteredSelected}
+                onChange={() =>
+                  setSelectedIds((current) => {
+                    const next = new Set(current)
+                    if (allFilteredSelected)
+                      filteredQuestions.forEach((question) =>
+                        next.delete(question.id),
+                      )
+                    else
+                      filteredQuestions.forEach((question) =>
+                        next.add(question.id),
+                      )
+                    return next
+                  })
+                }
+                aria-label="Select all filtered questions"
+                className="h-4 w-4 accent-primary-600"
+              />
+              Select filtered
+            </label>
             <span>
               Showing {filteredQuestions.length} of {questions.length} questions
               {duplicateQuestionIds.size > 0 &&
@@ -972,42 +1162,93 @@ export function QuestionList({
                 ` · ${duplicateOptionIds.size} with duplicate options`}
             </span>
             {selectedIds.size > 0 && (
-              <button
-                type="button"
-                className={dangerOutline}
-                onClick={() =>
-                  onConfirm({
-                    title: `Archive ${selectedIds.size} questions?`,
-                    body: "Selected question records will be hidden from learner views and retained so existing bookmarks and quiz attempts remain valid.",
-                    confirmLabel: "Archive selected",
-                    onConfirm: async () => {
-                      try {
-                        for (const id of selectedIds) {
-                          await archiveQuestion(owner, id)
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  aria-label="Bulk question action"
+                  className="input w-auto py-1.5 text-xs"
+                  defaultValue=""
+                  onChange={(event) => {
+                    const action = event.target.value
+                    event.target.value = ""
+                    if (!action) return
+                    const selected = questions.filter((question) =>
+                      selectedIds.has(question.id),
+                    )
+                    const labels: Record<string, string> = {
+                      "difficulty:Easy": "Set difficulty to Easy",
+                      "difficulty:Medium": "Set difficulty to Medium",
+                      "difficulty:Hard": "Set difficulty to Hard",
+                      publish: "Publish selected questions",
+                      unpublish: "Unpublish selected questions",
+                      archive: "Archive selected questions",
+                    }
+                    const isDifficulty = action.startsWith("difficulty:")
+                    const difficulty = isDifficulty ? action.split(":")[1] : ""
+                    onConfirm({
+                      title: `${labels[action]}?`,
+                      body: `${selected.length} selected questions will be updated. The operation will revalidate each record before writing.`,
+                      confirmLabel:
+                        action === "archive"
+                          ? "Archive selected"
+                          : "Apply selected action",
+                      onConfirm: async () => {
+                        try {
+                          if (isDifficulty) {
+                            await bulkUpdateQuestions(owner, [...selectedIds], {
+                              difficulty,
+                            })
+                          } else if (action === "publish") {
+                            await bulkUpdateQuestions(owner, [...selectedIds], {
+                              status: "published",
+                            })
+                          } else if (action === "unpublish") {
+                            await bulkUpdateQuestions(owner, [...selectedIds], {
+                              status: "draft",
+                            })
+                          } else {
+                            for (const id of selectedIds)
+                              await archiveQuestion(owner, id)
+                          }
+                          audit(
+                            `${labels[action]} (${selected.length})`,
+                            ownerLabel,
+                          )
+                          toast(`${selected.length} questions updated`)
+                          setSelectedIds(new Set())
+                        } catch (error) {
+                          toast(
+                            error instanceof Error
+                              ? error.message
+                              : "The bulk action failed.",
+                            "error",
+                          )
                         }
-                        audit(
-                          `Archived ${plural(selectedIds.size, "question")}`,
-                          ownerLabel,
-                        )
-                        toast(
-                          `Archived ${plural(selectedIds.size, "question")}`,
-                        )
-                        setSelectedIds(new Set())
-                      } catch (error) {
-                        toast(
-                          error instanceof Error
-                            ? error.message
-                            : "Selected questions couldn't be archived.",
-                          "error",
-                        )
-                      }
-                    },
-                  })
-                }
-              >
-                <Archive size={14} />
-                Archive selected
-              </button>
+                      },
+                    })
+                  }}
+                >
+                  <option value="">Bulk action…</option>
+                  <option value="difficulty:Easy">
+                    Set difficulty to Easy
+                  </option>
+                  <option value="difficulty:Medium">
+                    Set difficulty to Medium
+                  </option>
+                  <option value="difficulty:Hard">
+                    Set difficulty to Hard
+                  </option>
+                  <option value="publish">Publish selected</option>
+                  <option value="unpublish">Unpublish selected</option>
+                  <option value="archive">Archive selected</option>
+                </select>
+                <button
+                  type="button"
+                  className={smallOutline}
+                  onClick={() => setSelectedIds(new Set())}
+                >
+                  Clear selection ({selectedIds.size})
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -1017,12 +1258,21 @@ export function QuestionList({
         <BulkUpload
           existing={questions}
           onClose={() => setBulkOpen(false)}
-          onImport={async (rows) => {
+          onImport={async (rows, sourceType, fileName) => {
             try {
-              await saveQuestions(
-                owner,
-                rows.map((row) => ({ ...row, id: newQuestionId() })),
-              )
+              const prepared = rows.map((row) => ({
+                ...row,
+                id: row.id || newQuestionId(),
+              }))
+              const useTrustedService =
+                !import.meta.env.DEV ||
+                Boolean(import.meta.env.VITE_FIREBASE_FUNCTIONS_EMULATOR_HOST)
+              if (useTrustedService)
+                await importQuestionOperation(owner, prepared, {
+                  sourceType,
+                  fileName,
+                })
+              else await saveQuestions(owner, prepared)
             } catch (error) {
               toast(
                 error instanceof Error

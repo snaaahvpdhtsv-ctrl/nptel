@@ -12,6 +12,7 @@ import type {
   RequestItem,
   Week,
 } from "./data"
+import type { BulkOperation } from "./cloud-content"
 import type { QuestionBank } from "./question-bank"
 
 export type A11yKey = "largeText" | "highContrast" | "reducedMotion" | "dyslexiaSpacing"
@@ -57,6 +58,12 @@ export interface AppState {
     },
     questions: AdminQuestion[],
   ) => Promise<void>
+  bulkUpdateQuestions: (
+    owner: { id: string courseId: string type: "week" | "paper" },
+    questionIds: string[],
+    patch: Partial<Pick<AdminQuestion, "difficulty" | "topic" | "explanation" | "status">>,
+  ) => Promise<void>
+  bulkOperations: BulkOperation[]
   archiveQuestion: (
     owner: {
       id: string

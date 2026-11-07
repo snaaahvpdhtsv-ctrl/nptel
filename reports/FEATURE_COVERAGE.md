@@ -11,7 +11,10 @@
 | PYQ listing/answers | Yes | Published paper data | Published reads | Published rules | Yes | PASSED |
 | PYQ interactive practice | Yes | Learner E2E completion | Existing question bank | Published reads | Yes | VERIFIED |
 | Accessibility controls | Yes | Toggle/persistence checks | N/A | N/A | Yes | PARTIALLY VERIFIED |
-| CSV validation/import | Source/UI | Content-service validation | Admin writes | Admin/draft rules | Source only | PARTIALLY VERIFIED |
+| CSV validation/import | UI preview/import | Content-service + parser tests | Admin writes | Admin/draft rules | Source only | VERIFIED local scope |
+| JSON question import | UI row preview | Parser + trusted service tests | Admin callable path | Admin-only operation history | Source only | PARTIALLY VERIFIED |
+| Bulk edit/publish/archive | UI selection/actions | Trusted service readiness tests | Admin callable path | Parent ownership and learner visibility | Source only | PARTIALLY VERIFIED |
+| Operation history/rollback | UI history/report/rollback | Trusted service + idempotency tests | Admin-only operation records | Client writes denied | Source only | PARTIALLY VERIFIED |
 | Question inventory | Source/UI | Filter/flag logic | Content service | Parent ownership | Source only | PARTIALLY VERIFIED |
 | Admin content quality dashboard | Yes | Diagnostics 6/6; filters/search/deep link E2E; axe; 100/500/1000 browser benchmark | Derived from Firestore content; rules 11/11; 11 observed emulator requests | Claim-only admin access; signed-out guard | 390px rendered audit | VERIFIED |
 | Draft-review-publish | Yes | Review, approve, reject controls | Rules accept review; draft hidden | Admin claim | Admin E2E/auth | VERIFIED |

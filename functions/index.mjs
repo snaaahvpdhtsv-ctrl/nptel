@@ -8,6 +8,9 @@ import {
   savePaper,
   saveQuestion,
   saveQuestions,
+  saveQuestionsWithOperation,
+  updateQuestionsWithOperation,
+  rollbackImportOperation,
   saveWeek,
 } from "./content-service.mjs"
 
@@ -50,6 +53,21 @@ export const saveQuestionContent = callable(({ owner, question }) =>
 )
 export const importQuestionContent = callable(({ owner, questions }) =>
   saveQuestions(db, owner, questions),
+)
+export const importQuestionOperation = callable(
+  ({ owner, questions, metadata }) =>
+    saveQuestionsWithOperation(db, owner, questions, {
+      ...metadata,
+    }),
+)
+export const updateQuestionOperation = callable(
+  ({ owner, questionIds, patch, metadata }) =>
+    updateQuestionsWithOperation(db, owner, questionIds, patch, {
+      ...metadata,
+    }),
+)
+export const rollbackImportOperationContent = callable(({ operationId }) =>
+  rollbackImportOperation(db, operationId),
 )
 export const archiveQuestionContent = callable(({ owner, questionId }) =>
   archiveQuestion(db, owner, questionId),

@@ -18,6 +18,7 @@ import { StatusBadge } from "../../components/common"
 import { useApp } from "../../lib/app-context"
 import { useAuth } from "../../lib/auth-context"
 import { subscribeToAudit, writeAudit } from "../../lib/cloud-audit"
+import { rollbackImportOperation } from "../../lib/cloud-content"
 import { buildQualityReport } from "../../lib/content-quality"
 import { coursePath } from "../../lib/course-context"
 import type { Course } from "../../lib/data"
@@ -37,6 +38,7 @@ import { PapersPanel, QuestionList, WeeksPanel } from "./ContentPanels"
 import { CoursesPanel } from "./CoursesPanel"
 import { OverviewSection } from "./OverviewSection"
 import { QualityPanel } from "./QualityPanel"
+import { BulkOperationsPanel } from "./BulkOperationsPanel"
 import { RequestsPanel } from "./RequestsPanel"
 import {
   ConfirmDialog,
@@ -208,6 +210,7 @@ export default function AdminPage() {
     papers: allPapers,
     requests,
     adminQuestions,
+    bulkOperations,
     toast,
   } = useApp()
   // Desktop gets a sidebar; smaller screens a row of section tabs.
@@ -497,6 +500,33 @@ export default function AdminPage() {
               ) : (
                 noCourse
               )}
+            </section>
+
+            <section
+              hidden={section !== "bulk"}
+              aria-labelledby="admin-section-bulk"
+            >
+              <SectionHeader
+                id="bulk"
+                description="Review trusted import and bulk-edit outcomes, download reports, and roll back eligible imports."
+                scope={siteScope}
+              />
+              <BulkOperationsPanel
+                operations={bulkOperations}
+                onRollback={async (operation) => {
+                  try {
+                    await rollbackImportOperation(operation.id)
+                    toast("Bulk import rolled back")
+                  } catch (error) {
+                    toast(
+                      error instanceof Error
+                        ? error.message
+                        : "The bulk import could not be rolled back.",
+                      "error",
+                    )
+                  }
+                }}
+              />
             </section>
 
             <section

@@ -492,6 +492,31 @@ test("admin edits are visible to learners and unpublishing hides the same record
   await assertFails(getDoc(userQuestionRef))
 })
 
+test("bulk operation history is admin-readable and client-write protected", async () => {
+  const admin = testEnv
+    .authenticatedContext("bulk-admin", { admin: true })
+    .firestore()
+  const learner = testEnv.authenticatedContext("bulk-learner").firestore()
+  const operation = doc(admin, "bulkOperations", "operation-1")
+  await assertFails(
+    setDoc(operation, {
+      type: "import",
+      status: "completed",
+      createdAt: "2025-01-01T10:00:00.000Z",
+    }),
+  )
+  await assertFails(getDoc(doc(learner, "bulkOperations", "operation-1")))
+  await assertFails(
+    getDoc(
+      doc(
+        testEnv.unauthenticatedContext().firestore(),
+        "bulkOperations",
+        "operation-1",
+      ),
+    ),
+  )
+})
+
 test("feedback submissions are constrained", async () => {
   const database = testEnv.unauthenticatedContext().firestore()
   await assertSucceeds(

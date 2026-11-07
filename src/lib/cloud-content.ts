@@ -1,23 +1,60 @@
 import {
   collection,
   doc,
+  getDoc,
+  limit,
   onSnapshot,
+  orderBy,
   query,
   setDoc,
   where,
   writeBatch,
+  type Unsubscribe,
   type DocumentData,
   type Query,
-  type Unsubscribe,
 } from "firebase/firestore"
+import { httpsCallable } from "firebase/functions"
 import type { AdminQuestion, Course, Paper, Status, Week } from "./data"
-import { firestore } from "./firebase"
+import { isValidQuestion } from "./question-validation"
+import { firebaseFunctions, firestore } from "./firebase"
+
+export { isValidQuestion } from "./question-validation"
 
 export interface CloudContent {
   courses: Course[]
   weeks: Week[]
   papers: Paper[]
   questions: Record<string, AdminQuestion[]>
+}
+
+export type BulkOperationStatus = "completed" | "partial" | "failed" | "rolled_back"
+
+export type BulkOperation = {
+  id: string
+  type: "import" | "edit" | "publish" | "unpublish" | "archive" | "restore"
+  sourceType?: "csv" | "json"
+  fileName?: string
+  courseId: string
+  ownerId: string
+  ownerType: "week" | "paper"
+  createdAt: string
+  completedAt?: string
+  actorId?: string
+  total: number
+  succeeded: number
+  failed: number
+  skipped: number
+  rejected: number
+  retryable: number
+  status: BulkOperationStatus
+  questionIds: string[]
+  results: Array<{
+    row: number
+    questionId?: string
+    status: "created" | "updated" | "rejected" | "skipped" | "failed"
+    reason: string
+    retryable: boolean
+  }>
 }
 
 const asStatus = (value: unknown): Status =>
@@ -87,16 +124,6 @@ const asQuestion = (id: string, value: DocumentData): AdminQuestion => {
     status: asStatus(value.status),
   }
 }
-
-export const isValidQuestion = (question: AdminQuestion) =>
-  question.questionText.trim().length > 0 &&
-  Boolean(question.options) &&
-  (question.options?.length ?? 0) >= 2 &&
-  (question.options?.length ?? 0) <= 6 &&
-  question.options?.every((option) => option.trim().length > 0) === true &&
-  Number.isInteger(question.correctAnswerIndex) &&
-  question.correctAnswerIndex >= 0 &&
-  question.correctAnswerIndex < (question.options?.length ?? 0)
 
 const requireFirestore = () => {
   if (!firestore) throw new Error("Firebase Firestore is not configured.")
@@ -439,6 +466,210 @@ export async function saveQuestions(
     )
   }
   await batch.commit()
+}
+
+export async function importQuestionOperation(
+  owner: { id: string courseId: string type: "week" | "paper" },
+  questions: AdminQuestion[],
+  metadata: { sourceType: "csv" | "json" fileName: string },
+) {
+  if (!firebaseFunctions)
+    throw new Error("Trusted bulk content service is not configured.")
+  const callable = httpsCallable(firebaseFunctions, "importQuestionOperation")
+  const result = await callable({ owner, questions, metadata })
+  return result.data as { operationId: string }
+}
+
+export async function updateQuestionOperation(
+  owner: { id: string courseId: string type: "week" | "paper" },
+  questionIds: string[],
+  patch: Partial<Pick<AdminQuestion, "difficulty" | "topic" | "explanation" | "status">>,
+) {
+  if (!firebaseFunctions)
+    throw new Error("Trusted bulk content service is not configured.")
+  const callable = httpsCallable(firebaseFunctions, "updateQuestionOperation")
+  const result = await callable({ owner, questionIds, patch })
+  return result.data as { operationId: string }
+}
+
+export async function rollbackImportOperation(operationId: string) {
+  if (!firebaseFunctions)
+    throw new Error("Trusted bulk content service is not configured.")
+  const callable = httpsCallable(
+    firebaseFunctions,
+    "rollbackImportOperationContent",
+  )
+  const result = await callable({ operationId })
+  return result.data as { operationId: string status: "rolled_back" }
+}
+
+export async function importQuestionsWithOperation(
+  owner: {
+    id: string
+    courseId: string
+    type: "week" | "paper"
+  },
+  questions: AdminQuestion[],
+  operation: Omit<BulkOperation, "id" | "completedAt" | "questionIds" | "succeeded" | "failed" | "skipped" | "rejected" | "retryable" | "status"> & {
+    results: BulkOperation["results"]
+  },
+) {
+  const database = requireFirestore()
+  if (questions.length < 1 || questions.length > 450)
+    throw new Error(
+      "Bulk import must contain between 1 and 450 valid questions.",
+    )
+  const operationRef = doc(collection(database, "bulkOperations"))
+  const ids = new Set<string>()
+  for (const question of questions) {
+    if (ids.has(question.id))
+      throw new Error("The import contains duplicate question IDs.")
+    ids.add(question.id)
+    if (question.status !== "draft")
+      throw new Error("Imported questions must remain drafts.")
+  }
+  const batch = writeBatch(database)
+  batch.set(operationRef, {
+    ...operation,
+    type: "import",
+    status: "completed",
+    completedAt: new Date().toISOString(),
+    questionIds: questions.map((question) => question.id),
+    succeeded: questions.length,
+    failed: 0,
+    skipped: 0,
+    rejected: 0,
+    retryable: 0,
+    results: operation.results,
+  })
+  for (const question of questions) {
+    const { id, ...data } = question
+    batch.create(
+      doc(database, "questions", id),
+      withoutUndefined({
+        ...data,
+        courseId: owner.courseId,
+        ...(owner.type === "week"
+          ? { weekId: owner.id, paperId: null }
+          : { paperId: owner.id, weekId: null }),
+        status: "draft",
+        contentReady: false,
+      }),
+    )
+  }
+  await batch.commit()
+  return operationRef.id
+}
+
+export async function bulkUpdateQuestions(
+  owner: {
+    id: string
+    courseId: string
+    type: "week" | "paper"
+  },
+  questions: AdminQuestion[],
+  patch: Partial<Pick<AdminQuestion, "difficulty" | "topic" | "explanation" | "status">>,
+) {
+  const database = requireFirestore()
+  if (questions.length < 1 || questions.length > 450)
+    throw new Error("Select between 1 and 450 questions.")
+  if (patch.status === "published") {
+    const invalid = questions.find((question) => !isValidQuestion(question))
+    if (invalid)
+      throw new Error(
+        `Question ${invalid.id} is incomplete and cannot be published.`,
+      )
+    const notReviewed = questions.find(
+      (question) =>
+        question.status !== "review" && question.status !== "published",
+    )
+    if (notReviewed)
+      throw new Error(
+        `Question ${notReviewed.id} must be submitted for review before publishing.`,
+      )
+  }
+  if (
+    patch.status === "archived" &&
+    questions.some((question) => question.status === "published")
+  )
+    throw new Error("Unpublish published questions before archiving them.")
+  const parent = await getDoc(
+    doc(database, owner.type === "week" ? "weeks" : "papers", owner.id),
+  )
+  if (!parent.exists() || parent.data().courseId !== owner.courseId)
+    throw new Error(
+      "The selected parent content is missing or belongs to another course.",
+    )
+  const stored = await Promise.all(
+    questions.map((question) =>
+      getDoc(doc(database, "questions", question.id)),
+    ),
+  )
+  if (
+    stored.some(
+      (snapshot, index) =>
+        !snapshot.exists() ||
+        snapshot.data().courseId !== owner.courseId ||
+        (owner.type === "week"
+          ? snapshot.data().weekId !== owner.id
+          : snapshot.data().paperId !== owner.id),
+    )
+  )
+    throw new Error(
+      "One or more selected questions no longer belongs to this content.",
+    )
+  const batch = writeBatch(database)
+  for (const question of questions) {
+    const next = { ...question, ...patch }
+    batch.update(
+      doc(database, "questions", question.id),
+      withoutUndefined({
+        ...(patch.difficulty !== undefined
+          ? { difficulty: patch.difficulty }
+          : {}),
+        ...(patch.topic !== undefined
+          ? { topic: patch.topic || undefined }
+          : {}),
+        ...(patch.explanation !== undefined
+          ? { explanation: patch.explanation || undefined }
+          : {}),
+        ...(patch.status !== undefined
+          ? {
+              status: patch.status,
+              contentReady:
+                patch.status === "published" && isValidQuestion(next),
+            }
+          : {}),
+        courseId: owner.courseId,
+        ...(owner.type === "week"
+          ? { weekId: owner.id, paperId: null }
+          : { paperId: owner.id, weekId: null }),
+      }),
+    )
+  }
+  await batch.commit()
+}
+
+export function subscribeToBulkOperations(
+  onOperations: (operations: BulkOperation[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  const database = requireFirestore()
+  return onSnapshot(
+    query(
+      collection(database, "bulkOperations"),
+      orderBy("createdAt", "desc"),
+      limit(100),
+    ),
+    (snapshot) =>
+      onOperations(
+        snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data() as Omit<BulkOperation, "id">,
+        })),
+      ),
+    onError,
+  )
 }
 
 export async function restoreWeekBackup(
