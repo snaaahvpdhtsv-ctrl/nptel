@@ -42,3 +42,16 @@ performed.
 Audit records are stored in the top-level `auditLogs` collection. The current
 record shape does not contain a course identifier, so course-filtered audit
 queries remain a documented limitation rather than an implied capability.
+
+## Production audit-history investigation
+
+| Check | Result |
+|---|---|
+| Deployed frontend project | Confirmed `nptel-88452` in the public production bundle |
+| Active Firestore release | Ruleset `d4d1a9cb-a267-4df6-a4d8-7c64f0c64260` |
+| Deployed `auditLogs` rule | Missing; catch-all deny applies |
+| Local `auditLogs` rule | Present and emulator-tested |
+| Current administrator claim | Not observable from this terminal without the administrator's session |
+| Production correction | Not deployed; requires explicit approval |
+
+The production issue is therefore **PARTIALLY FIXED**, not VERIFIED.

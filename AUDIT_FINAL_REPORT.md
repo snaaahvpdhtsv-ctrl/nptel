@@ -111,6 +111,34 @@ searches it, refreshes it, and confirms no permission error is rendered.
 No production claims, data, rules, Functions, environment variables, or
 deployments were changed.
 
+## Critical production audit-history investigation
+
+The deployed frontend was inspected read-only and embeds Firebase project
+`nptel-88452`, matching the intended project. Its reader is the top-level
+`auditLogs` collection, ordered by `createdAt desc` and limited to 100. Trusted
+callable writers also write to `auditLogs`; there is no writer/reader path
+mismatch.
+
+The active Firestore release was then inspected through the Firebase Rules API.
+`projects/nptel-88452/releases/cloud.firestore` points to ruleset
+`d4d1a9cb-a267-4df6-a4d8-7c64f0c64260`, created on 2026-11-06. The deployed
+ruleset has no `match /auditLogs/{entryId}` rule. Its catch-all deny therefore
+rejects the exact admin query with `Missing or insufficient permissions`.
+The local rules include the intended narrow admin-only read rule and deny all
+client writes.
+
+The current administrator's refreshed token and `admin: true` claim cannot be
+verified from this terminal because no administrator browser session or token
+was provided; no token was requested or exposed. The production bundle's
+project ID was verified without exposing Firebase credentials. A read-only
+unauthenticated REST request to `auditLogs` returned HTTP 403, consistent with
+the deployed catch-all deny.
+
+**Classification: PARTIALLY FIXED.** The smallest safe production correction is
+to deploy the already-reviewed local `firestore.rules` file through an
+explicitly approved Firebase rules deployment. That deployment was deliberately
+not performed under the task's production-safety restriction.
+
 ## Firebase and production boundary
 
 The emulator verifies guest published-content reads, draft denial, admin claim

@@ -256,7 +256,7 @@ export default function AdminPage() {
           "code" in error ? String((error as { code?: unknown }).code) : ""
         setAuditError(
           code === "permission-denied"
-            ? "Your admin access could not be verified. Refresh your session or sign out and sign in again."
+            ? "Firestore denied this audit read. Confirm this account has the trusted admin claim and that the deployed rules allow admin reads from auditLogs."
             : error.message,
         )
         setAuditLoading(false)

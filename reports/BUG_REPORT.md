@@ -100,3 +100,25 @@ Verified with:
 
 The collection path is `auditLogs`; the current schema has no course field, so
 course-specific filtering is not available in this audit-history model.
+
+### Production investigation: deployed rules are stale
+
+The persistent production error is **not fixed in the deployed Firebase
+project**. Read-only inspection of `projects/nptel-88452/releases/cloud.firestore`
+shows the active release points to ruleset
+`d4d1a9cb-a267-4df6-a4d8-7c64f0c64260`, created on 2026-11-06. That ruleset
+contains no `match /auditLogs/{entryId}` block, so the final catch-all
+`allow read, write: if false` denies every audit-history read. The local
+`firestore.rules` does contain the intended narrow rule:
+`allow read: if isAdmin(); allow create, update, delete: if false`.
+
+The production bundle was also inspected read-only and uses Firebase project
+`nptel-88452`; the project mismatch hypothesis is rejected. An unauthenticated
+REST read of `auditLogs` returned HTTP 403 as expected, confirming the
+collection is protected; the current administrator's private token/claim
+could not be inspected from this terminal session. No production rules,
+claims, data, or deployments were changed.
+
+**Classification: PARTIALLY FIXED.** The application and local rules are
+corrected and tested, but production requires a separately approved
+`firestore:rules` deployment before the admin query can succeed.
