@@ -29,7 +29,9 @@ function requireAdmin(request) {
 function callable(operation) {
   return onCall(
     {
-      enforceAppCheck: process.env.FUNCTIONS_EMULATOR !== "true",
+      // App Check is opt-in because the web client may be deployed without a
+      // site key. Admin custom claims remain the authorization boundary.
+      enforceAppCheck: process.env.ENFORCE_APP_CHECK === "true",
       maxInstances: 10,
     },
     async (request) => {
