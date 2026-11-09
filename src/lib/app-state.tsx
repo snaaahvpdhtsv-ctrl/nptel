@@ -41,6 +41,7 @@ import {
   saveQuestion as saveCloudQuestion,
   saveQuestions as saveCloudQuestions,
   saveWeek as saveCloudWeek,
+  swapWeeks as swapCloudWeeks,
   subscribeToContent,
   subscribeToBulkOperations,
   type BulkOperation,
@@ -281,6 +282,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [adminQuestions],
   )
 
+  const swapWeeks = useCallback(async (first: Week, second: Week) => {
+    await swapCloudWeeks(first, second)
+    setWeeks((current) =>
+      current.map((week) => {
+        if (week.id === first.id)
+          return { ...week, weekNumber: second.weekNumber }
+        if (week.id === second.id)
+          return { ...week, weekNumber: first.weekNumber }
+        return week
+      }),
+    )
+  }, [])
+
   const archiveWeek = useCallback(async (week: Week) => {
     await archiveCloudWeek(week)
     setWeeks((current) =>
@@ -504,6 +518,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       archiveCourse,
       weeks,
       saveWeek,
+      swapWeeks,
       archiveWeek,
       papers,
       savePaper,
@@ -536,6 +551,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       archiveCourse,
       weeks,
       saveWeek,
+      swapWeeks,
       archiveWeek,
       papers,
       savePaper,

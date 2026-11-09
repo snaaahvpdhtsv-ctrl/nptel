@@ -386,6 +386,27 @@ export async function saveWeek(week: Week, questions: AdminQuestion[]) {
   )
 }
 
+export async function swapWeeks(first: Week, second: Week) {
+  const database = requireFirestore()
+  const batch = writeBatch(database)
+  for (const [week, weekNumber] of [
+    [first, second.weekNumber],
+    [second, first.weekNumber],
+  ] as const) {
+    const { questionCount: _questionCount, ...data } = documentPayload(week)
+    batch.set(
+      doc(database, "weeks", week.id),
+      withoutUndefined({
+        ...data,
+        weekNumber,
+        contentReady: week.status === "published",
+      }),
+      { merge: true },
+    )
+  }
+  await batch.commit()
+}
+
 export async function savePaper(paper: Paper, questions: AdminQuestion[]) {
   const database = requireFirestore()
   if (

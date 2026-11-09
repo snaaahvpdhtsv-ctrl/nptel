@@ -1670,6 +1670,7 @@ export function WeeksPanel({
   const {
     weeks: allWeeks,
     saveWeek,
+    swapWeeks,
     saveQuestions,
     archiveWeek,
     newContentId,
@@ -1677,7 +1678,9 @@ export function WeeksPanel({
     toast,
   } = useApp()
   // This course's weeks; updates still go through the shared list, leaving other courses untouched.
-  const weeks = allWeeks.filter((week) => week.courseId === course.id)
+  const weeks = allWeeks
+    .filter((week) => week.courseId === course.id)
+    .sort(byNumber)
   const id = useId()
   const [form, setForm] = useState<{
     id: string | null
@@ -1935,8 +1938,10 @@ export function WeeksPanel({
         </p>
       ) : (
         <div className="space-y-2.5">
-          {weeks.map((week) => {
+          {weeks.map((week, index) => {
             const selected = week.id === selectedId
+            const previousWeek = weeks[index - 1]
+            const nextWeek = weeks[index + 1]
             return (
               <div key={week.id} className={rowClass(selected)}>
                 <button
@@ -1960,6 +1965,46 @@ export function WeeksPanel({
                   </span>
                 </button>
                 <div className="ml-auto flex shrink-0">
+                  <IconButton
+                    icon={ChevronUp}
+                    label={`Move ${week.title} earlier`}
+                    disabled={!previousWeek}
+                    onClick={async () => {
+                      if (!previousWeek) return
+                      try {
+                        await swapWeeks(week, previousWeek)
+                        audit(`Week ${week.weekNumber} moved earlier`, "Weeks")
+                        toast("Week order updated")
+                      } catch (error) {
+                        toast(
+                          error instanceof Error
+                            ? error.message
+                            : "Week order couldn't be updated.",
+                          "error",
+                        )
+                      }
+                    }}
+                  />
+                  <IconButton
+                    icon={ChevronDown}
+                    label={`Move ${week.title} later`}
+                    disabled={!nextWeek}
+                    onClick={async () => {
+                      if (!nextWeek) return
+                      try {
+                        await swapWeeks(week, nextWeek)
+                        audit(`Week ${week.weekNumber} moved later`, "Weeks")
+                        toast("Week order updated")
+                      } catch (error) {
+                        toast(
+                          error instanceof Error
+                            ? error.message
+                            : "Week order couldn't be updated.",
+                          "error",
+                        )
+                      }
+                    }}
+                  />
                   <IconButton
                     icon={week.status === "published" ? EyeOff : Eye}
                     label={

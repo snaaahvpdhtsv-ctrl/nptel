@@ -36,6 +36,7 @@ export interface AppState {
   archiveCourse: (course: Course) => Promise<void>
   weeks: Week[]
   saveWeek: (week: Week) => Promise<void>
+  swapWeeks: (first: Week, second: Week) => Promise<void>
   archiveWeek: (week: Week) => Promise<void>
   papers: Paper[]
   savePaper: (paper: Paper) => Promise<void>
