@@ -1,5 +1,9 @@
 import { FirebaseError, getApp, getApps, initializeApp } from "firebase/app"
 import {
+  initializeAppCheck,
+  ReCaptchaEnterpriseProvider,
+} from "firebase/app-check"
+import {
   browserPopupRedirectResolver,
   browserLocalPersistence,
   connectAuthEmulator,
@@ -95,6 +99,25 @@ export const firestore = app ? getFirestore(app) : null
 export const firebaseFunctions: Functions | null = app
   ? getFunctions(app)
   : null
+
+const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY
+export const firebaseAppCheckConfigured =
+  Boolean(app) &&
+  (!import.meta.env.PROD ||
+    (typeof appCheckSiteKey === "string" && appCheckSiteKey.trim().length > 0))
+
+if (app && import.meta.env.PROD) {
+  if (typeof appCheckSiteKey === "string" && appCheckSiteKey.trim()) {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    })
+  } else {
+    recordAuthDiagnostic("firebase.app-check.missing-config", {
+      projectId: config.projectId || null,
+    })
+  }
+}
 
 recordAuthDiagnostic("firebase.auth.initialized", {
   available: Boolean(firebaseAuth),

@@ -54,6 +54,7 @@ connectFirestoreEmulator(clientDatabase, "127.0.0.1", 8080)
 const suffix = Date.now().toString()
 const courseId = `callable-course-${suffix}`
 const weekId = `callable-week-${suffix}`
+const weekZeroId = `callable-week-zero-${suffix}`
 const questionId = `callable-question-${suffix}`
 const conflictQuestionId = `callable-conflict-${suffix}`
 const publishCourseId = `callable-publish-course-${suffix}`
@@ -87,6 +88,13 @@ await database.collection("weeks").doc(weekId).set({
   courseId,
   weekNumber: 1,
   title: "Callable QA Week",
+  status: "draft",
+  contentReady: false,
+})
+await database.collection("weeks").doc(weekZeroId).set({
+  courseId,
+  weekNumber: 0,
+  title: "Callable Week Zero",
   status: "draft",
   contentReady: false,
 })
@@ -187,6 +195,29 @@ try {
     .doc(operationId)
     .get()
   assert.equal(operation.get("succeeded"), 1)
+
+  const weekZeroQuestionId = `callable-week-zero-question-${suffix}`
+  const weekZeroResult = await httpsCallable(
+    functions,
+    "importQuestionOperation",
+  )({
+    owner: { id: weekZeroId, courseId, type: "week" },
+    questions: [
+      {
+        ...question,
+        id: weekZeroQuestionId,
+        questionText: "Callable week zero import question",
+      },
+    ],
+    metadata: { sourceType: "csv", fileName: "week-zero.csv" },
+  })
+  assert.ok(weekZeroResult.data.operationId)
+  assert.equal(
+    (await database.collection("questions").doc(weekZeroQuestionId).get()).get(
+      "weekId",
+    ),
+    weekZeroId,
+  )
 
   const editResult = await httpsCallable(
     functions,

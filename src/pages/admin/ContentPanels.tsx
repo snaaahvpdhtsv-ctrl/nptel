@@ -1280,10 +1280,16 @@ export function QuestionList({
                 })
               else await saveQuestions(owner, prepared)
             } catch (error) {
+              const code =
+                typeof error === "object" && error !== null && "code" in error
+                  ? String((error as { code?: unknown }).code)
+                  : ""
               toast(
-                error instanceof Error
-                  ? error.message
-                  : "Questions couldn't be imported.",
+                code === "functions/internal"
+                  ? "The question import service failed. Please retry; if it continues, check the deployed Firebase Function logs."
+                  : error instanceof Error
+                    ? error.message
+                    : "Questions couldn't be imported.",
                 "error",
               )
               return
