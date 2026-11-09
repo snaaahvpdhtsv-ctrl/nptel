@@ -74,6 +74,18 @@ test("content service enforces publication and preserves stable question IDs", a
   assert.equal(stored.get("questionText"), "Updated question")
 })
 
+test("content service accepts week 0", async () => {
+  const weekZero = {
+    ...week,
+    id: "week-0",
+    weekNumber: 0,
+    title: "Introduction",
+  }
+  await saveWeek(db, weekZero)
+  const stored = await db.collection("weeks").doc(weekZero.id).get()
+  assert.equal(stored.get("weekNumber"), 0)
+})
+
 test("bulk imports reject empty lists and duplicate IDs without writes", async () => {
   await assert.rejects(
     () => saveQuestions(db, owner, []),

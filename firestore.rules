@@ -198,7 +198,7 @@ service cloud.firestore {
         && validStatus()
         && request.resource.data.courseId is string
         && request.resource.data.weekNumber is int
-        && request.resource.data.weekNumber > 0
+        && request.resource.data.weekNumber >= 0
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 200;

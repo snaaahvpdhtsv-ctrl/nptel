@@ -1701,8 +1701,8 @@ export function WeeksPanel({
     const title = form.title.trim()
     if (!form.weekNumber.trim() || !title)
       return toast("Please enter a week number and title", "error")
-    if (!Number.isInteger(number) || number <= 0)
-      return toast("Week number must be a positive whole number", "error")
+    if (!Number.isInteger(number) || number < 0)
+      return toast("Week number must be a whole number starting at 0", "error")
     if (weeks.some((week) => week.weekNumber === number && week.id !== form.id))
       return toast(`Week ${number} already exists`, "error")
     const updated: Week = {
@@ -1888,7 +1888,7 @@ export function WeeksPanel({
               <input
                 id={`${id}-number`}
                 type="number"
-                min={1}
+                min={0}
                 value={form.weekNumber}
                 onChange={(event) =>
                   setForm({ ...form, weekNumber: event.target.value })

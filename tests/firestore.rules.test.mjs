@@ -400,6 +400,21 @@ test("published content requires complete records and a readiness marker", async
   )
 })
 
+test("admins can save week 0", async () => {
+  const admin = testEnv
+    .authenticatedContext("week-zero-admin", { admin: true })
+    .firestore()
+  await assertSucceeds(
+    setDoc(doc(admin, "weeks", "week-zero"), {
+      courseId: "published",
+      weekNumber: 0,
+      title: "Introduction",
+      status: "draft",
+      contentReady: false,
+    }),
+  )
+})
+
 test("archiving content preserves existing bookmarks and attempt snapshots", async () => {
   const admin = testEnv
     .authenticatedContext("admin-1", { admin: true })

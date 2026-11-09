@@ -123,8 +123,8 @@ async function saveParent(db, type, record) {
     throw new Error("Select a course for this content.")
   if (typeof record.title !== "string" || !record.title.trim())
     throw new Error(`Enter a ${isWeek ? "week" : "paper"} title.`)
-  if (isWeek && (!Number.isInteger(record.weekNumber) || record.weekNumber < 1))
-    throw new Error("Week number must be a positive whole number.")
+  if (isWeek && (!Number.isInteger(record.weekNumber) || record.weekNumber < 0))
+    throw new Error("Week number must be a whole number starting at 0.")
   if (
     !isWeek &&
     (!Number.isInteger(record.year) || record.year < 1950 || record.year > 2100)
